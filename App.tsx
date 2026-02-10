@@ -218,11 +218,65 @@ const App: React.FC = () => {
   const previewMedia = uploadedImage || selectedTemplate?.thumbnail || null;
   const previewMediaType: 'image' | 'video' = uploadedImage ? uploadedMediaType : 'image';
 
+  React.useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setShowMobilePanel(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  const updateDraggedElementPosition = (element: 'banner' | 'headline' | 'description', clientX: number, clientY: number) => {
+    if (!previewRef.current) return;
+    const rect = previewRef.current.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+
+    setLayoutSettings(prev => ({
+      ...prev,
+      [element]: {
+        x: Math.max(0, Math.min(100, x)),
+        y: Math.max(0, Math.min(100, y))
+      }
+    }));
+  };
+
+  const updateLogoPosition = (clientX: number, clientY: number) => {
+    if (!previewRef.current || !logoRef.current) return;
+    const previewRect = previewRef.current.getBoundingClientRect();
+    const logoRect = logoRef.current.getBoundingClientRect();
+    const maxX = Math.max(0, previewRect.width - logoRect.width);
+    const maxY = Math.max(0, previewRect.height - logoRect.height);
+
+    const rawX = clientX - previewRect.left - logoDragOffsetRef.current.x;
+    const rawY = clientY - previewRect.top - logoDragOffsetRef.current.y;
+    const clampedX = Math.max(0, Math.min(maxX, rawX));
+    const clampedY = Math.max(0, Math.min(maxY, rawY));
+
+    setLogoPosition({
+      x: (clampedX / previewRect.width) * 100,
+      y: (clampedY / previewRect.height) * 100
+    });
+  };
+
   // Handlers
   const handleMouseDown = (e: React.MouseEvent, element: 'banner' | 'headline' | 'description') => {
     e.stopPropagation();
     e.preventDefault();
     setDraggingElement(element);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, element: 'banner' | 'headline' | 'description') => {
+    if (!e.touches.length) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const touch = e.touches[0];
+    setDraggingElement(element);
+    updateDraggedElementPosition(element, touch.clientX, touch.clientY);
   };
 
   const handleLogoMouseDown = (e: React.MouseEvent) => {
@@ -237,56 +291,69 @@ const App: React.FC = () => {
     setIsDraggingLogo(true);
   };
 
+  const handleLogoTouchStart = (e: React.TouchEvent) => {
+    if (!e.touches.length) return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (!previewRef.current || !logoRef.current) return;
+    const touch = e.touches[0];
+    const logoRect = logoRef.current.getBoundingClientRect();
+    logoDragOffsetRef.current = {
+      x: touch.clientX - logoRect.left,
+      y: touch.clientY - logoRect.top
+    };
+    setIsDraggingLogo(true);
+  };
+
   React.useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
-      if (draggingElement && previewRef.current) {
-        const rect = previewRef.current.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * 100;
-        const y = ((e.clientY - rect.top) / rect.height) * 100;
+      if (!draggingElement) return;
+      updateDraggedElementPosition(draggingElement, e.clientX, e.clientY);
+    };
 
-        setLayoutSettings(prev => ({
-          ...prev,
-          [draggingElement]: {
-            x: Math.max(0, Math.min(100, x)),
-            y: Math.max(0, Math.min(100, y))
-          }
-        }));
-      }
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (!draggingElement || !e.touches.length) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      updateDraggedElementPosition(draggingElement, touch.clientX, touch.clientY);
     };
 
     const handleWindowMouseUp = () => {
       setDraggingElement(null);
     };
 
+    const handleWindowTouchEnd = () => {
+      setDraggingElement(null);
+    };
+
     if (draggingElement) {
       window.addEventListener('mousemove', handleWindowMouseMove);
       window.addEventListener('mouseup', handleWindowMouseUp);
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
+      window.addEventListener('touchend', handleWindowTouchEnd);
+      window.addEventListener('touchcancel', handleWindowTouchEnd);
     }
 
     return () => {
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('touchmove', handleWindowTouchMove);
+      window.removeEventListener('touchend', handleWindowTouchEnd);
+      window.removeEventListener('touchcancel', handleWindowTouchEnd);
     };
   }, [draggingElement]);
 
   React.useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
-      if (isDraggingLogo && previewRef.current && logoRef.current) {
-        const previewRect = previewRef.current.getBoundingClientRect();
-        const logoRect = logoRef.current.getBoundingClientRect();
-        const maxX = Math.max(0, previewRect.width - logoRect.width);
-        const maxY = Math.max(0, previewRect.height - logoRect.height);
+      if (!isDraggingLogo) return;
+      updateLogoPosition(e.clientX, e.clientY);
+    };
 
-        const rawX = e.clientX - previewRect.left - logoDragOffsetRef.current.x;
-        const rawY = e.clientY - previewRect.top - logoDragOffsetRef.current.y;
-        const clampedX = Math.max(0, Math.min(maxX, rawX));
-        const clampedY = Math.max(0, Math.min(maxY, rawY));
-
-        setLogoPosition({
-          x: (clampedX / previewRect.width) * 100,
-          y: (clampedY / previewRect.height) * 100
-        });
-      }
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (!isDraggingLogo || !e.touches.length) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      updateLogoPosition(touch.clientX, touch.clientY);
     };
 
     const handleWindowMouseUp = () => {
@@ -295,34 +362,28 @@ const App: React.FC = () => {
       }
     };
 
+    const handleWindowTouchEnd = () => {
+      if (isDraggingLogo) {
+        setIsDraggingLogo(false);
+      }
+    };
+
     if (isDraggingLogo) {
       window.addEventListener('mousemove', handleWindowMouseMove);
       window.addEventListener('mouseup', handleWindowMouseUp);
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
+      window.addEventListener('touchend', handleWindowTouchEnd);
+      window.addEventListener('touchcancel', handleWindowTouchEnd);
     }
 
     return () => {
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('touchmove', handleWindowTouchMove);
+      window.removeEventListener('touchend', handleWindowTouchEnd);
+      window.removeEventListener('touchcancel', handleWindowTouchEnd);
     };
   }, [isDraggingLogo]);
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (draggingElement && previewRef.current) {
-      const rect = previewRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-      setLayoutSettings(prev => ({
-        ...prev,
-        [draggingElement]: {
-          x: Math.max(0, Math.min(100, x)),
-          y: Math.max(0, Math.min(100, y))
-        }
-      }));
-    }
-  };
-
-  const handleMouseUp = () => { };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -565,7 +626,7 @@ const App: React.FC = () => {
       </div>
 
       {/* ============ MAIN CONTENT ============ */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-screen pb-20 md:pb-0">
         {/* ============ HEADER ============ */}
         <header className={`${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'} border-b px-4 py-3 sticky top-0 z-40`}>
           <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -602,7 +663,7 @@ const App: React.FC = () => {
             {/* Mobile menu toggle */}
             <button
               onClick={() => setShowMobilePanel(!showMobilePanel)}
-              className="md:hidden p-2 rounded-lg bg-gray-100 text-gray-600"
+              className={`md:hidden p-2 rounded-lg ${showMobilePanel ? 'bg-red-500 text-white' : darkMode ? 'bg-gray-900 text-gray-300' : 'bg-gray-100 text-gray-600'}`}
             >
               <Type className="w-5 h-5" />
             </button>
@@ -645,16 +706,29 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div id="studio" className="flex flex-col md:flex-row max-w-7xl mx-auto scroll-mt-24">
+        <div id="studio" className="relative flex flex-col md:flex-row max-w-7xl mx-auto w-full scroll-mt-24">
+          {showMobilePanel && (
+            <button
+              type="button"
+              aria-label="Close editor panel"
+              onClick={() => setShowMobilePanel(false)}
+              className="md:hidden fixed inset-0 top-[57px] z-40 bg-black/45"
+            />
+          )}
+
           {/* ============ LEFT PANEL ============ */}
           <aside className={`
-          ${showMobilePanel ? 'block' : 'hidden'} md:block
+          fixed md:static inset-x-0 top-[57px] bottom-0 md:inset-auto
+          ${showMobilePanel ? 'translate-y-0' : 'translate-y-full pointer-events-none'} md:translate-y-0 md:pointer-events-auto
+          z-50 md:z-auto
           w-full md:w-80 lg:w-96
+          max-h-[calc(100dvh-57px)] md:max-h-none
           ${darkMode ? 'bg-black' : 'bg-white'}
-          md:min-h-[calc(100vh-57px)] overflow-y-auto
-          p-4 md:p-6
-          border-b md:border-b-0 md:border-r
+          md:min-h-[calc(100vh-57px)] overflow-y-auto overscroll-contain
+          p-4 md:p-6 pb-24 md:pb-6
+          border-t md:border-t-0 border-b md:border-b-0 md:border-r
           ${darkMode ? 'border-gray-800' : 'border-gray-200'}
+          transition-transform duration-300 ease-out
         `}>
 
             {/* Canvas Size Selection */}
@@ -871,14 +945,18 @@ const App: React.FC = () => {
                 />
               </div>
             </div>
+
+            <div className="lg:hidden">
+              {styleSettingsPanel}
+            </div>
           </aside>
 
           {/* ============ RIGHT PANEL - PREVIEW ============ */}
-          <main className={`flex-1 p-4 md:p-8 ${darkMode ? 'bg-black' : 'bg-gray-100'} min-h-[calc(100vh-57px)] flex flex-col`}>
+          <main className={`flex-1 p-3 sm:p-4 md:p-8 pb-24 md:pb-8 ${darkMode ? 'bg-black' : 'bg-gray-100'} min-h-[calc(100vh-57px)] flex flex-col`}>
             <div className="flex flex-col lg:flex-row gap-6 h-full">
               <div className="flex-1 flex flex-col">
             {/* Preview Canvas */}
-            <div className="flex-1 flex items-start justify-center pt-4 mb-4">
+            <div className="flex-1 flex items-start justify-center pt-2 md:pt-4 mb-4 px-1 sm:px-2">
               <div
                 className="bg-black rounded-xl overflow-hidden shadow-2xl transition-transform"
                 style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
@@ -892,7 +970,7 @@ const App: React.FC = () => {
                 ) : (
                   <div
                     ref={previewRef}
-                    className="w-96 md:w-[500px] relative transition-all duration-300 cursor-crosshair group"
+                    className="w-full max-w-[500px] relative transition-all duration-300 cursor-crosshair group"
                     style={{ aspectRatio: selectedSocialMediaSize.aspectRatio.replace(':', '/') }}
 
                   >
@@ -915,6 +993,7 @@ const App: React.FC = () => {
                       <div
                         ref={logoRef}
                         onMouseDown={handleLogoMouseDown}
+                        onTouchStart={handleLogoTouchStart}
                         className={`absolute z-30 select-none cursor-move transition-shadow ${isDraggingLogo ? 'ring-2 ring-red-500 shadow-xl' : 'hover:ring-1 hover:ring-white/60'}`}
                         style={{
                           left: `${logoPosition.x}%`,
@@ -940,6 +1019,7 @@ const App: React.FC = () => {
                       {showBanner && bannerText && (
                         <div
                           onMouseDown={(e) => handleMouseDown(e, 'banner')}
+                          onTouchStart={(e) => handleTouchStart(e, 'banner')}
                           className={`absolute px-3 py-1 text-xs font-bold mb-3 uppercase tracking-wide cursor-move select-none transition-shadow ${draggingElement === 'banner' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
                           style={{
                             left: `${layoutSettings.banner.x}%`,
@@ -954,6 +1034,7 @@ const App: React.FC = () => {
 
                       <h2
                         onMouseDown={(e) => handleMouseDown(e, 'headline')}
+                        onTouchStart={(e) => handleTouchStart(e, 'headline')}
                         className={`absolute font-bold mb-3 leading-tight cursor-move select-none transition-shadow ${draggingElement === 'headline' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
                         style={{
                           left: `${layoutSettings.headline.x}%`,
@@ -970,6 +1051,7 @@ const App: React.FC = () => {
 
                       <p
                         onMouseDown={(e) => handleMouseDown(e, 'description')}
+                        onTouchStart={(e) => handleTouchStart(e, 'description')}
                         className={`absolute leading-relaxed cursor-move select-none transition-shadow ${draggingElement === 'description' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
                         style={{
                           left: `${layoutSettings.description.x}%`,
@@ -990,15 +1072,15 @@ const App: React.FC = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex justify-center space-x-3 mb-4">
-              <button className={`flex items-center px-6 py-2 rounded-lg text-sm font-medium border ${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+            <div className="flex flex-col sm:flex-row justify-center gap-3 mb-4">
+              <button className={`flex items-center justify-center px-4 sm:px-6 py-2 rounded-lg text-sm font-medium border ${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
                 <Save className="w-4 h-4 mr-2" />
                 Save Draft
               </button>
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating || !headline}
-                className="flex items-center px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                className="flex items-center justify-center px-4 sm:px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 {isGenerating ? `Creating... ${isMultiImageMode ? videoProgress + '%' : ''}` : 'Create Graphic'}
@@ -1006,17 +1088,17 @@ const App: React.FC = () => {
             </div>
 
             {/* Zoom Controls & Reset Layout */}
-            <div className="flex justify-between items-center space-x-2">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
               <button
                 onClick={() => setLayoutSettings(defaultLayoutSettings)}
-                className={`p-2 rounded-lg text-xs flex items-center ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                className={`w-full sm:w-auto p-2 rounded-lg text-xs flex items-center justify-center ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
                 title="Reset Layout"
               >
                 <RotateCcw className="w-3 h-3 mr-1" />
                 Reset Layout
               </button>
 
-              <div className="flex items-center space-x-2">
+              <div className="w-full sm:w-auto flex items-center justify-center space-x-2">
                 <button
                   onClick={() => setZoom(Math.max(50, zoom - 10))}
                   className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
@@ -1036,7 +1118,7 @@ const App: React.FC = () => {
             </div>
               </div>
 
-              <aside className={`lg:w-80 2xl:w-96 rounded-xl border p-4 h-fit lg:sticky lg:top-24 ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+              <aside className={`hidden lg:block lg:w-80 2xl:w-96 rounded-xl border p-4 h-fit lg:sticky lg:top-24 ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
                 {styleSettingsPanel}
               </aside>
             </div>
@@ -1207,7 +1289,7 @@ const App: React.FC = () => {
         {showTemplateSidebar && (
           <div className="fixed inset-0 z-50 flex">
             <div className="absolute inset-0 bg-black/50" onClick={() => setShowTemplateSidebar(false)} />
-            <div className={`relative ml-auto w-80 h-full overflow-y-auto shadow-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <div className={`relative ml-auto w-full max-w-sm h-full overflow-y-auto shadow-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Templates</h2>
@@ -1235,22 +1317,46 @@ const App: React.FC = () => {
         )}
 
         {/* Mobile Bottom Bar */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3 flex justify-around z-30">
-          <button onClick={() => setShowMobilePanel(!showMobilePanel)} className="flex flex-col items-center text-gray-600">
+        <div className={`md:hidden fixed bottom-0 left-0 right-0 border-t px-2 sm:px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] flex justify-around z-50 ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}`}>
+          <button
+            onClick={() => setShowMobilePanel(!showMobilePanel)}
+            className={`flex flex-col items-center ${showMobilePanel ? 'text-red-500' : darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+          >
             <Type className="w-5 h-5" />
             <span className="text-xs mt-1">Edit</span>
           </button>
-          <button onClick={() => setShowTemplateSidebar(true)} className="flex flex-col items-center text-gray-600">
+          <button
+            onClick={() => {
+              setShowMobilePanel(false);
+              setShowTemplateSidebar(true);
+            }}
+            className={`flex flex-col items-center ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+          >
             <Grid className="w-5 h-5" />
             <span className="text-xs mt-1">Templates</span>
           </button>
-          <button onClick={handleGenerate} disabled={isGenerating || !headline} className="flex flex-col items-center text-red-500">
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || !headline}
+            className="flex flex-col items-center text-red-500 disabled:opacity-40"
+          >
             <Plus className="w-5 h-5" />
             <span className="text-xs mt-1">Create</span>
           </button>
-          <button onClick={handleDownload} disabled={!generatedOutput} className="flex flex-col items-center text-green-500">
+          <button
+            onClick={handleDownload}
+            disabled={!generatedOutput}
+            className="flex flex-col items-center text-green-500 disabled:opacity-40"
+          >
             <Download className="w-5 h-5" />
             <span className="text-xs mt-1">Download</span>
+          </button>
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`flex flex-col items-center ${darkMode ? 'text-yellow-400' : 'text-gray-600'}`}
+          >
+            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            <span className="text-xs mt-1">Theme</span>
           </button>
         </div>
       </div>
