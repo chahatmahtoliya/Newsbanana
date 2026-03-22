@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { Newspaper, Download, Image as ImageIcon, Type, Palette, Grid, X, Moon, Sun, Save, Plus, Minus, Film, Layers, Move, Monitor, RotateCcw, Sparkles, Rocket, ShieldCheck, ChevronDown, CheckCircle2, Mail } from 'lucide-react';
+import { Newspaper, Download, Image as ImageIcon, Type, Palette, Grid, X, Moon, Sun, Save, Plus, Minus, Film, Layers, Move, Monitor, RotateCcw, Sparkles, Rocket, ShieldCheck, ChevronDown, CheckCircle2, Mail, Upload } from 'lucide-react';
 import { generateNewsCreative, generateNewsVideoCreative } from './services/geminiService';
 import { generateMultiImageVideo } from './services/slideshowService';
+import { generateNewsVideo } from './services/videoService';
 import { StyleSettings, defaultStyleSettings, MultiImageSettings, defaultMultiImageSettings, VideoMode, TransitionType, CollageLayout, socialMediaSizes, SocialMediaSizePreset, SocialMediaPlatform, LayoutSettings, defaultLayoutSettings, TextCase } from './types';
 import CreatorSidebar from './components/CreatorSidebar';
 
@@ -120,6 +121,13 @@ const FAQ_ITEMS = [
   },
 ];
 
+type ResizableTextElement = 'headline' | 'description';
+
+const TEXT_SIZE_LIMITS: Record<ResizableTextElement, { min: number; max: number }> = {
+  headline: { min: 24, max: 120 },
+  description: { min: 12, max: 48 }
+};
+
 const App: React.FC = () => {
   // Theme
   const [darkMode, setDarkMode] = useState(false);
@@ -133,7 +141,7 @@ const App: React.FC = () => {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
   // Template
-  const [selectedTemplate, setSelectedTemplate] = useState<VisualTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<VisualTemplate | null>(VISUAL_TEMPLATES[0]);
 
   // Content
   const [headline, setHeadline] = useState('');
@@ -169,6 +177,8 @@ const App: React.FC = () => {
   const [generatedOutput, setGeneratedOutput] = useState<{ url: string; type: 'image' | 'video'; extension?: 'png' | 'mp4' | 'webm' } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
+  const [generationTarget, setGenerationTarget] = useState<'image' | 'video' | null>(null);
+  const [showVideoProgress, setShowVideoProgress] = useState(false);
 
   // Social media size
   const [selectedSocialMediaSize, setSelectedSocialMediaSize] = useState<SocialMediaSizePreset>(socialMediaSizes[0]);
@@ -176,47 +186,33 @@ const App: React.FC = () => {
   // Layout
   const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>(defaultLayoutSettings);
   const [draggingElement, setDraggingElement] = useState<'banner' | 'headline' | 'description' | null>(null);
+  const [resizingTextElement, setResizingTextElement] = useState<ResizableTextElement | null>(null);
+  const [previewScale, setPreviewScale] = useState(1);
   const previewRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
   const logoDragOffsetRef = useRef({ x: 0, y: 0 });
-
-  React.useEffect(() => {
-    const handleWindowMouseMove = (e: MouseEvent) => {
-      if (draggingElement && previewRef.current) {
-        const rect = previewRef.current.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * 100;
-        const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-        setLayoutSettings(prev => ({
-          ...prev,
-          [draggingElement]: {
-            x: Math.max(0, Math.min(100, x)),
-            y: Math.max(0, Math.min(100, y))
-          }
-        }));
-      }
-    };
-
-    const handleWindowMouseUp = () => {
-      if (draggingElement) {
-        setDraggingElement(null);
-      }
-    };
-
-    if (draggingElement) {
-      window.addEventListener('mousemove', handleWindowMouseMove);
-      window.addEventListener('mouseup', handleWindowMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleWindowMouseMove);
-      window.removeEventListener('mouseup', handleWindowMouseUp);
-    };
-  }, [draggingElement]);
+  const textResizeStartRef = useRef({
+    element: null as ResizableTextElement | null,
+    startX: 0,
+    startY: 0,
+    startFontSize: 0
+  });
+  const mobileUploadInputRef = useRef<HTMLInputElement>(null);
 
   const isMultiImageMode = multiImageSettings.videoMode !== 'single';
   const previewMedia = uploadedImage || selectedTemplate?.thumbnail || null;
   const previewMediaType: 'image' | 'video' = uploadedImage ? uploadedMediaType : 'image';
+  const isVideoGenerationInProgress = isGenerating && generationTarget === 'video';
+  const generationPrimaryLabel = !isGenerating
+    ? 'Create Graphic'
+    : isVideoGenerationInProgress
+      ? (showVideoProgress ? `Processing video... ${videoProgress}%` : 'Processing video...')
+      : 'Creating image...';
+  const generationCompactLabel = !isGenerating
+    ? 'Create'
+    : isVideoGenerationInProgress
+      ? 'Processing'
+      : 'Creating';
 
   React.useEffect(() => {
     const handleResize = () => {
@@ -229,6 +225,49 @@ const App: React.FC = () => {
       window.removeEventListener('resize', handleResize);
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!previewRef.current) return;
+
+    const updatePreviewScale = () => {
+      if (!previewRef.current) return;
+      const rect = previewRef.current.getBoundingClientRect();
+      const nextScale = rect.width / selectedSocialMediaSize.width;
+      setPreviewScale(nextScale > 0 ? nextScale : 1);
+    };
+
+    updatePreviewScale();
+    const observer = new ResizeObserver(updatePreviewScale);
+    observer.observe(previewRef.current);
+    window.addEventListener('resize', updatePreviewScale);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updatePreviewScale);
+    };
+  }, [selectedSocialMediaSize.id, generatedOutput]);
+
+  React.useEffect(() => {
+    if (!generatedOutput) return;
+    setGeneratedOutput(null);
+  }, [
+    headline,
+    description,
+    bannerText,
+    showBanner,
+    uploadedImage,
+    uploadedMediaType,
+    uploadedLogo,
+    logoSize,
+    logoPosition.x,
+    logoPosition.y,
+    selectedTemplate?.id,
+    selectedSocialMediaSize.id,
+    styleSettings,
+    layoutSettings,
+    multipleImages,
+    multiImageSettings
+  ]);
 
   const updateDraggedElementPosition = (element: 'banner' | 'headline' | 'description', clientX: number, clientY: number) => {
     if (!previewRef.current) return;
@@ -277,6 +316,47 @@ const App: React.FC = () => {
     const touch = e.touches[0];
     setDraggingElement(element);
     updateDraggedElementPosition(element, touch.clientX, touch.clientY);
+  };
+
+  const updateTextSizeFromCanvasResize = (clientX: number, clientY: number) => {
+    const resizeState = textResizeStartRef.current;
+    if (!resizeState.element) return;
+
+    const delta = (clientX - resizeState.startX) + (clientY - resizeState.startY);
+    const speed = resizeState.element === 'headline' ? 0.35 : 0.2;
+    const limits = TEXT_SIZE_LIMITS[resizeState.element];
+    const nextSize = Math.round(Math.max(limits.min, Math.min(limits.max, resizeState.startFontSize + (delta * speed))));
+
+    if (resizeState.element === 'headline') {
+      setStyleSettings(prev => prev.headlineFontSize === nextSize ? prev : { ...prev, headlineFontSize: nextSize });
+    } else {
+      setStyleSettings(prev => prev.descriptionFontSize === nextSize ? prev : { ...prev, descriptionFontSize: nextSize });
+    }
+  };
+
+  const startTextResize = (element: ResizableTextElement, clientX: number, clientY: number) => {
+    setDraggingElement(null);
+    textResizeStartRef.current = {
+      element,
+      startX: clientX,
+      startY: clientY,
+      startFontSize: element === 'headline' ? styleSettings.headlineFontSize : styleSettings.descriptionFontSize
+    };
+    setResizingTextElement(element);
+  };
+
+  const handleTextResizeMouseDown = (e: React.MouseEvent, element: ResizableTextElement) => {
+    e.stopPropagation();
+    e.preventDefault();
+    startTextResize(element, e.clientX, e.clientY);
+  };
+
+  const handleTextResizeTouchStart = (e: React.TouchEvent, element: ResizableTextElement) => {
+    if (!e.touches.length) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const touch = e.touches[0];
+    startTextResize(element, touch.clientX, touch.clientY);
   };
 
   const handleLogoMouseDown = (e: React.MouseEvent) => {
@@ -345,6 +425,41 @@ const App: React.FC = () => {
 
   React.useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
+      if (!resizingTextElement) return;
+      updateTextSizeFromCanvasResize(e.clientX, e.clientY);
+    };
+
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (!resizingTextElement || !e.touches.length) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      updateTextSizeFromCanvasResize(touch.clientX, touch.clientY);
+    };
+
+    const stopResize = () => {
+      setResizingTextElement(null);
+      textResizeStartRef.current.element = null;
+    };
+
+    if (resizingTextElement) {
+      window.addEventListener('mousemove', handleWindowMouseMove);
+      window.addEventListener('mouseup', stopResize);
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
+      window.addEventListener('touchend', stopResize);
+      window.addEventListener('touchcancel', stopResize);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', stopResize);
+      window.removeEventListener('touchmove', handleWindowTouchMove);
+      window.removeEventListener('touchend', stopResize);
+      window.removeEventListener('touchcancel', stopResize);
+    };
+  }, [resizingTextElement]);
+
+  React.useEffect(() => {
+    const handleWindowMouseMove = (e: MouseEvent) => {
       if (!isDraggingLogo) return;
       updateLogoPosition(e.clientX, e.clientY);
     };
@@ -401,6 +516,11 @@ const App: React.FC = () => {
     }
   };
 
+  const handleMobileUploadClick = () => {
+    setShowMobilePanel(false);
+    mobileUploadInputRef.current?.click();
+  };
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -433,24 +553,38 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!headline) return;
+    const activeMediaType: 'image' | 'video' = uploadedImage ? uploadedMediaType : 'image';
+    const isMultiImageVideo = isMultiImageMode && multipleImages.length > 0;
+    const willGenerateVideo = isMultiImageVideo || activeMediaType === 'video';
+
+    setVideoProgress(0);
+    setGenerationTarget(willGenerateVideo ? 'video' : 'image');
+    setShowVideoProgress(willGenerateVideo); // Show progress for any video generation
     setIsGenerating(true);
 
     try {
-      if (isMultiImageMode && multipleImages.length > 0) {
+      if (isMultiImageVideo) {
         const videoUrl = await generateMultiImageVideo(
-          multipleImages, headline, description, styleSettings, multiImageSettings,
+          multipleImages,
+          headline,
+          description,
+          styleSettings,
+          multiImageSettings,
+          uploadedImage || undefined, // Pass uploaded media as audio source
           (p) => setVideoProgress(p)
         );
         setGeneratedOutput({ url: videoUrl, type: 'video', extension: 'mp4' });
       } else {
         const activeMedia = uploadedImage || selectedTemplate?.thumbnail || null;
-        const activeMediaType: 'image' | 'video' = uploadedImage ? uploadedMediaType : 'image';
         if (activeMediaType === 'video') {
-          const videoResult = await generateNewsVideoCreative(
-            headline, description, activeMedia,
-            styleSettings, selectedSocialMediaSize, layoutSettings, uploadedLogo, logoSize, logoPosition
+          const videoUrl = await generateNewsVideo(
+            headline,
+            description,
+            activeMedia,
+            styleSettings,
+            (p) => setVideoProgress(p)
           );
-          setGeneratedOutput({ url: videoResult.url, type: 'video', extension: videoResult.extension });
+          setGeneratedOutput({ url: videoUrl, type: 'video', extension: 'mp4' });
         } else {
           const imageUrl = await generateNewsCreative(
             headline, description, activeMedia,
@@ -463,6 +597,8 @@ const App: React.FC = () => {
       console.error(err);
     } finally {
       setIsGenerating(false);
+      setGenerationTarget(null);
+      setShowVideoProgress(false);
     }
   };
 
@@ -471,7 +607,7 @@ const App: React.FC = () => {
       const extension = generatedOutput.extension || (generatedOutput.type === 'video' ? 'mp4' : 'png');
       const link = document.createElement('a');
       link.href = generatedOutput.url;
-      link.download = `newsbanao-${Date.now()}.${extension}`;
+      link.download = `newsbanana-${Date.now()}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -494,34 +630,58 @@ const App: React.FC = () => {
     }
   };
 
+  const shellBase = darkMode
+    ? 'bg-gray-900 text-white border border-gray-800'
+    : 'border border-gray-200 bg-white text-gray-900 shadow-sm';
+  const shellMuted = darkMode ? 'text-[#8ba1b5]' : 'text-gray-500';
+  const shellHeading = darkMode ? 'text-[#e8fff8]' : 'text-gray-900';
+  const shellField = darkMode
+    ? 'bg-[#09151f] border-[#183243] text-white placeholder-[#62798c]'
+    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
+  const shellSubtle = darkMode
+    ? 'border-gray-800 bg-gray-900'
+    : 'border-gray-200 bg-gray-50';
+  const accentSolid = darkMode
+    ? 'bg-[#7EF7D4] text-[#041017] hover:bg-[#98ffe1]'
+    : 'bg-gray-900 text-white hover:bg-gray-800';
+  const accentGhost = darkMode
+    ? 'border border-[#173042] bg-[#0a1822] text-[#d8fff4] hover:border-[#7EF7D4] hover:text-white'
+    : 'border border-gray-300 bg-white text-gray-800 hover:bg-gray-50';
+  const successButton = darkMode
+    ? 'bg-[#5BC0EB] text-[#06111A] hover:bg-[#76cff2]'
+    : 'bg-emerald-600 text-white hover:bg-emerald-700';
+
   const styleSettingsPanel = (
-    <div>
-      <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-        <Palette className="w-4 h-4 mr-2 text-red-500" />
+    <div className="space-y-4">
+      <div>
+        <p className={`text-[11px] font-mono uppercase tracking-[0.28em] ${shellMuted}`}>Visual System</p>
+        <h3 className={`mt-2 flex items-center text-sm font-semibold ${shellHeading}`}>
+          <Palette className="w-4 h-4 mr-2 text-[#7EF7D4]" />
         Style Settings
-      </h3>
+        </h3>
+      </div>
 
       <div className="mb-3">
-        <label className={`text-sm block mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Headline Font</label>
+        <label className={`text-sm block mb-1 ${darkMode ? 'text-[#cde7da]' : 'text-gray-700'}`}>Headline Font</label>
         <select
           value={styleSettings.headlineFont}
           onChange={(e) => setStyleSettings(prev => ({ ...prev, headlineFont: e.target.value }))}
-          className={`w-full px-3 py-2 rounded-lg border text-sm ${darkMode ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:border-red-500`}
+          className={`w-full px-3 py-3 rounded-2xl border text-sm ${shellField} focus:outline-none focus:border-[#7EF7D4]`}
         >
           {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
       </div>
 
       <div className="mb-4">
-        <label className={`text-sm block mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Headline Casing</label>
+        <label className={`text-sm block mb-1 ${darkMode ? 'text-[#cde7da]' : 'text-gray-700'}`}>Headline Casing</label>
         <div className="grid grid-cols-4 gap-1">
           {(['uppercase', 'lowercase', 'sentence', 'none'] as const).map(casing => (
             <button
               key={casing}
               onClick={() => setStyleSettings(prev => ({ ...prev, headlineCasing: casing }))}
               className={`text-xs py-1 rounded border transition-colors ${styleSettings.headlineCasing === casing
-                ? 'bg-red-500 text-white border-red-500'
-                : darkMode ? 'bg-gray-800 text-gray-400 border-gray-700' : 'bg-gray-100 text-gray-600 border-gray-200'
+                ? 'bg-[#7EF7D4] text-[#041017] border-[#7EF7D4]'
+                : darkMode ? 'bg-[#0c1b27] text-[#8ba1b5] border-[#173042]' : 'bg-gray-100 text-gray-600 border-gray-200'
                 }`}
             >
               {casing === 'uppercase' ? 'AA' : casing === 'lowercase' ? 'aa' : casing === 'sentence' ? 'Aa' : 'Raw'}
@@ -531,15 +691,15 @@ const App: React.FC = () => {
       </div>
 
       <div className="mb-4">
-        <label className={`text-sm block mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Description Casing</label>
+        <label className={`text-sm block mb-1 ${darkMode ? 'text-[#cde7da]' : 'text-gray-700'}`}>Description Casing</label>
         <div className="grid grid-cols-4 gap-1">
           {(['uppercase', 'lowercase', 'sentence', 'none'] as const).map(casing => (
             <button
               key={casing}
               onClick={() => setStyleSettings(prev => ({ ...prev, descriptionCasing: casing }))}
               className={`text-xs py-1 rounded border transition-colors ${styleSettings.descriptionCasing === casing
-                ? 'bg-red-500 text-white border-red-500'
-                : darkMode ? 'bg-gray-800 text-gray-400 border-gray-700' : 'bg-gray-100 text-gray-600 border-gray-200'
+                ? 'bg-[#7EF7D4] text-[#041017] border-[#7EF7D4]'
+                : darkMode ? 'bg-[#0c1b27] text-[#8ba1b5] border-[#173042]' : 'bg-gray-100 text-gray-600 border-gray-200'
                 }`}
             >
               {casing === 'uppercase' ? 'AA' : casing === 'lowercase' ? 'aa' : casing === 'sentence' ? 'Aa' : 'Raw'}
@@ -550,13 +710,13 @@ const App: React.FC = () => {
 
       <div className="mb-4">
         <div className="flex justify-between mb-1">
-          <label className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Headline Size</label>
-          <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{styleSettings.headlineFontSize}px</span>
+          <label className={`text-sm ${darkMode ? 'text-[#cde7da]' : 'text-gray-700'}`}>Headline Size</label>
+          <span className={`text-xs ${shellMuted}`}>{styleSettings.headlineFontSize}px</span>
         </div>
         <input
           type="range"
-          min={24}
-          max={120}
+          min={TEXT_SIZE_LIMITS.headline.min}
+          max={TEXT_SIZE_LIMITS.headline.max}
           value={styleSettings.headlineFontSize}
           onChange={(e) => setStyleSettings(prev => ({ ...prev, headlineFontSize: parseInt(e.target.value) }))}
           className="w-full accent-red-500"
@@ -564,11 +724,11 @@ const App: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <label className={`text-sm block mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Description Font</label>
+        <label className={`text-sm block mb-1 ${darkMode ? 'text-[#cde7da]' : 'text-gray-700'}`}>Description Font</label>
         <select
           value={styleSettings.descriptionFont}
           onChange={(e) => setStyleSettings(prev => ({ ...prev, descriptionFont: e.target.value }))}
-          className={`w-full px-3 py-2 rounded-lg border text-sm ${darkMode ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:border-red-500`}
+          className={`w-full px-3 py-3 rounded-2xl border text-sm ${shellField} focus:outline-none focus:border-[#7EF7D4]`}
         >
           {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
@@ -576,27 +736,27 @@ const App: React.FC = () => {
 
       <div className="mb-4">
         <div className="flex justify-between mb-1">
-          <label className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Description Size</label>
-          <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{styleSettings.descriptionFontSize}px</span>
+          <label className={`text-sm ${darkMode ? 'text-[#cde7da]' : 'text-gray-700'}`}>Description Size</label>
+          <span className={`text-xs ${shellMuted}`}>{styleSettings.descriptionFontSize}px</span>
         </div>
         <input
           type="range"
-          min={12}
-          max={48}
+          min={TEXT_SIZE_LIMITS.description.min}
+          max={TEXT_SIZE_LIMITS.description.max}
           value={styleSettings.descriptionFontSize}
           onChange={(e) => setStyleSettings(prev => ({ ...prev, descriptionFontSize: parseInt(e.target.value) }))}
           className="w-full accent-red-500"
         />
       </div>
 
-      <div className={`flex rounded-lg overflow-hidden border ${darkMode ? 'border-gray-800' : 'border-gray-300'}`}>
+      <div className={`flex rounded-2xl overflow-hidden border ${darkMode ? 'border-[#173042]' : 'border-gray-300'}`}>
         {(['banner', 'headline', 'desc'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveColorTab(tab)}
             className={`flex-1 py-2 text-xs font-medium uppercase transition-colors ${activeColorTab === tab
-              ? 'bg-red-500 text-white'
-              : darkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-600'
+              ? 'bg-[#7EF7D4] text-[#041017]'
+              : darkMode ? 'bg-[#09151f] text-[#8ba1b5]' : 'bg-gray-100 text-gray-600'
               }`}
           >
             {tab === 'desc' ? 'Desc.' : tab}
@@ -608,7 +768,7 @@ const App: React.FC = () => {
           type="color"
           value={getActiveColor()}
           onChange={(e) => setActiveColor(e.target.value)}
-          className="w-full h-10 rounded-lg cursor-pointer"
+          className="w-full h-12 rounded-2xl cursor-pointer"
         />
       </div>
     </div>
@@ -629,16 +789,18 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col min-h-screen pb-20 md:pb-0">
         {/* ============ HEADER ============ */}
         <header className={`${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'} border-b px-4 py-3 sticky top-0 z-40`}>
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
             {/* Logo */}
-            <div className="flex items-center space-x-2">
-              <div className="bg-red-500 p-2 rounded-lg">
-                <Newspaper className="w-5 h-5 text-white" />
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className={`${darkMode ? 'bg-red-500 text-white' : 'bg-red-500 text-white'} p-2 rounded-lg`}>
+                <Newspaper className="w-5 h-5" />
               </div>
-              <div className="hidden sm:block">
-                <span className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>news</span>
-                <span className="text-red-500 font-bold">banao</span>
-                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Create Professional News Graphics</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>news</span>
+                  <span className="text-red-500 font-bold">banana</span>
+                </div>
+                <p className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Create Professional News Graphics</p>
               </div>
             </div>
 
@@ -684,7 +846,7 @@ const App: React.FC = () => {
                 className="flex items-center px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
               >
                 <Plus className="w-4 h-4 mr-1" />
-                {isGenerating ? 'Creating...' : 'Create Graphic'}
+                {generationPrimaryLabel}
               </button>
 
               <button
@@ -706,7 +868,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div id="studio" className="relative flex flex-col md:flex-row max-w-7xl mx-auto w-full scroll-mt-24">
+        <div id="studio" className="relative flex flex-col md:flex-row max-w-7xl mx-auto w-full scroll-mt-24 gap-4 md:gap-0">
           {showMobilePanel && (
             <button
               type="button"
@@ -724,13 +886,12 @@ const App: React.FC = () => {
           w-full md:w-80 lg:w-96
           max-h-[calc(100dvh-57px)] md:max-h-none
           ${darkMode ? 'bg-black' : 'bg-white'}
-          md:min-h-[calc(100vh-57px)] overflow-y-auto overscroll-contain
+          md:min-h-[calc(100vh-57px)] overflow-y-auto md:overflow-visible overscroll-y-contain md:overscroll-auto
           p-4 md:p-6 pb-24 md:pb-6
           border-t md:border-t-0 border-b md:border-b-0 md:border-r
           ${darkMode ? 'border-gray-800' : 'border-gray-200'}
           transition-transform duration-300 ease-out
         `}>
-
             {/* Canvas Size Selection */}
             <div className="mb-6">
               <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
@@ -883,7 +1044,7 @@ const App: React.FC = () => {
                   onChange={(e) => setLogoSize(parseInt(e.target.value))}
                   className="w-full accent-red-500 cursor-pointer"
                 />
-                <p className={`text-xs mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Drag logo on preview to move it.</p>
+                <p className={`text-xs mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Drag logo to move. Drag text corner handles on canvas to resize in real time.</p>
               </div>
             </div>
 
@@ -955,167 +1116,200 @@ const App: React.FC = () => {
           <main className={`flex-1 p-3 sm:p-4 md:p-8 pb-24 md:pb-8 ${darkMode ? 'bg-black' : 'bg-gray-100'} min-h-[calc(100vh-57px)] flex flex-col`}>
             <div className="flex flex-col lg:flex-row gap-6 h-full">
               <div className="flex-1 flex flex-col">
-            {/* Preview Canvas */}
-            <div className="flex-1 flex items-start justify-center pt-2 md:pt-4 mb-4 px-1 sm:px-2">
-              <div
-                className="bg-black rounded-xl overflow-hidden shadow-2xl transition-transform"
-                style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
-              >
-                {generatedOutput ? (
-                  generatedOutput.type === 'video' ? (
-                    <video src={generatedOutput.url} controls autoPlay loop className="max-w-full max-h-[70vh]" />
-                  ) : (
-                    <img src={generatedOutput.url} alt="Generated" className="max-w-full max-h-[70vh]" />
-                  )
-                ) : (
+                {/* Preview Canvas */}
+                <div className="flex-1 flex items-start justify-center pt-2 md:pt-4 mb-4 px-1 sm:px-2">
                   <div
-                    ref={previewRef}
-                    className="w-full max-w-[500px] relative transition-all duration-300 cursor-crosshair group"
-                    style={{ aspectRatio: selectedSocialMediaSize.aspectRatio.replace(':', '/') }}
-
+                    className="bg-black rounded-xl overflow-hidden shadow-2xl transition-transform"
+                    style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
                   >
-                    {/* Background */}
-                    {previewMedia ? (
-                      previewMediaType === 'video' ? (
-                        <video src={previewMedia} className="w-full h-full object-cover select-none pointer-events-none" autoPlay muted loop playsInline />
+                    {generatedOutput ? (
+                      generatedOutput.type === 'video' ? (
+                        <video src={generatedOutput.url} controls autoPlay loop className="max-w-full max-h-[70vh]" />
                       ) : (
-                        <img src={previewMedia} alt="" className="w-full h-full object-cover select-none pointer-events-none" />
+                        <img src={generatedOutput.url} alt="Generated" className="max-w-full max-h-[70vh]" />
                       )
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-b from-gray-700 to-gray-900 select-none pointer-events-none" />
-                    )}
-
-                    {/* Gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent pointer-events-none select-none" />
-
-                    {/* Logo overlay */}
-                    {uploadedLogo && (
                       <div
-                        ref={logoRef}
-                        onMouseDown={handleLogoMouseDown}
-                        onTouchStart={handleLogoTouchStart}
-                        className={`absolute z-30 select-none cursor-move transition-shadow ${isDraggingLogo ? 'ring-2 ring-red-500 shadow-xl' : 'hover:ring-1 hover:ring-white/60'}`}
-                        style={{
-                          left: `${logoPosition.x}%`,
-                          top: `${logoPosition.y}%`
-                        }}
+                        ref={previewRef}
+                        className="w-full max-w-[500px] relative transition-all duration-300 cursor-crosshair group"
+                        style={{ aspectRatio: selectedSocialMediaSize.aspectRatio.replace(':', '/') }}
+
                       >
-                        <img
-                          src={uploadedLogo}
-                          alt="Logo overlay"
-                          className="h-auto object-contain drop-shadow-lg pointer-events-none"
-                          style={{ width: `${logoSize}px` }}
-                        />
+                        {/* Background */}
+                        {previewMedia ? (
+                          previewMediaType === 'video' ? (
+                            <video src={previewMedia} className="w-full h-full object-cover select-none pointer-events-none" autoPlay muted loop playsInline />
+                          ) : (
+                            <img src={previewMedia} alt="" className="w-full h-full object-cover select-none pointer-events-none" />
+                          )
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-b from-gray-700 to-gray-900 select-none pointer-events-none" />
+                        )}
+
+                        {/* Gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent pointer-events-none select-none" />
+
+                        {/* Logo overlay */}
+                        {uploadedLogo && (
+                          <div
+                            ref={logoRef}
+                            onMouseDown={handleLogoMouseDown}
+                            onTouchStart={handleLogoTouchStart}
+                            className={`absolute z-30 select-none cursor-move transition-shadow ${isDraggingLogo ? 'ring-2 ring-red-500 shadow-xl' : 'hover:ring-1 hover:ring-white/60'}`}
+                            style={{
+                              left: `${logoPosition.x}%`,
+                              top: `${logoPosition.y}%`
+                            }}
+                          >
+                            <img
+                              src={uploadedLogo}
+                              alt="Logo overlay"
+                              className="h-auto object-contain drop-shadow-lg pointer-events-none"
+                              style={{ width: `${logoSize}px` }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Icon button (top right) */}
+                        <button className={`absolute top-4 right-4 w-8 h-8 bg-gray-800/80 rounded-lg flex items-center justify-center z-20 ${uploadedLogo ? 'opacity-0 pointer-events-none' : ''}`}>
+                          <ImageIcon className="w-4 h-4 text-gray-400" />
+                        </button>
+
+                        {/* Content Layer */}
+                        <div className="absolute inset-0 overflow-hidden">
+                          {showBanner && bannerText && (
+                            <div
+                              onMouseDown={(e) => handleMouseDown(e, 'banner')}
+                              onTouchStart={(e) => handleTouchStart(e, 'banner')}
+                              className={`absolute px-3 py-1 text-xs font-bold mb-3 uppercase tracking-wide cursor-move select-none transition-shadow ${draggingElement === 'banner' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
+                              style={{
+                                left: `${layoutSettings.banner.x}%`,
+                                top: `${layoutSettings.banner.y}%`,
+                                backgroundColor: styleSettings.bannerColor,
+                                fontFamily: 'Oswald, sans-serif'
+                              }}
+                            >
+                              {bannerText}
+                            </div>
+                          )}
+
+                          <h2
+                            onMouseDown={(e) => handleMouseDown(e, 'headline')}
+                            onTouchStart={(e) => handleTouchStart(e, 'headline')}
+                            className={`absolute relative font-bold mb-3 leading-tight cursor-move select-none transition-shadow ${draggingElement === 'headline' || resizingTextElement === 'headline' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
+                            style={{
+                              left: `${layoutSettings.headline.x}%`,
+                              top: `${layoutSettings.headline.y}%`,
+                              color: styleSettings.headlineColor,
+                              fontFamily: `${styleSettings.headlineFont}, sans-serif`,
+                              fontSize: `${Math.max(10, styleSettings.headlineFontSize * previewScale)}px`,
+                              wordBreak: 'break-word',
+                              maxWidth: '90%'
+                            }}
+                          >
+                            {applyTextCase(headline || 'TEMPLATE', styleSettings.headlineCasing)}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => handleTextResizeMouseDown(e, 'headline')}
+                              onTouchStart={(e) => handleTextResizeTouchStart(e, 'headline')}
+                               className="absolute -bottom-2 -right-2 w-4 h-4 rounded-sm border border-white/80 bg-red-500/90 shadow-md cursor-nwse-resize"
+                              title="Resize headline text"
+                              aria-label="Resize headline text"
+                            />
+                          </h2>
+
+                          <p
+                            onMouseDown={(e) => handleMouseDown(e, 'description')}
+                            onTouchStart={(e) => handleTouchStart(e, 'description')}
+                            className={`absolute relative leading-relaxed cursor-move select-none transition-shadow ${draggingElement === 'description' || resizingTextElement === 'description' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
+                            style={{
+                              left: `${layoutSettings.description.x}%`,
+                              top: `${layoutSettings.description.y}%`,
+                              color: styleSettings.descriptionColor,
+                              fontFamily: `${styleSettings.descriptionFont}, sans-serif`,
+                              fontSize: `${Math.max(8, styleSettings.descriptionFontSize * previewScale)}px`,
+                              wordBreak: 'break-word',
+                              maxWidth: '90%'
+                            }}
+                          >
+                            {applyTextCase(description || 'Your description will appear here...', styleSettings.descriptionCasing)}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => handleTextResizeMouseDown(e, 'description')}
+                              onTouchStart={(e) => handleTextResizeTouchStart(e, 'description')}
+                               className="absolute -bottom-2 -right-2 w-4 h-4 rounded-sm border border-white/80 bg-red-500/90 shadow-md cursor-nwse-resize"
+                              title="Resize description text"
+                              aria-label="Resize description text"
+                            />
+                          </p>
+                        </div>
                       </div>
                     )}
+                  </div>
+                </div>
 
-                    {/* Icon button (top right) */}
-                    <button className={`absolute top-4 right-4 w-8 h-8 bg-gray-800/80 rounded-lg flex items-center justify-center z-20 ${uploadedLogo ? 'opacity-0 pointer-events-none' : ''}`}>
-                      <ImageIcon className="w-4 h-4 text-gray-400" />
-                    </button>
-
-                    {/* Content Layer */}
-                    <div className="absolute inset-0 overflow-hidden">
-                      {showBanner && bannerText && (
-                        <div
-                          onMouseDown={(e) => handleMouseDown(e, 'banner')}
-                          onTouchStart={(e) => handleTouchStart(e, 'banner')}
-                          className={`absolute px-3 py-1 text-xs font-bold mb-3 uppercase tracking-wide cursor-move select-none transition-shadow ${draggingElement === 'banner' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
-                          style={{
-                            left: `${layoutSettings.banner.x}%`,
-                            top: `${layoutSettings.banner.y}%`,
-                            backgroundColor: styleSettings.bannerColor,
-                            fontFamily: 'Oswald, sans-serif'
-                          }}
-                        >
-                          {bannerText}
-                        </div>
-                      )}
-
-                      <h2
-                        onMouseDown={(e) => handleMouseDown(e, 'headline')}
-                        onTouchStart={(e) => handleTouchStart(e, 'headline')}
-                        className={`absolute font-bold mb-3 leading-tight cursor-move select-none transition-shadow ${draggingElement === 'headline' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
-                        style={{
-                          left: `${layoutSettings.headline.x}%`,
-                          top: `${layoutSettings.headline.y}%`,
-                          color: styleSettings.headlineColor,
-                          fontFamily: `${styleSettings.headlineFont}, sans-serif`,
-                          fontSize: `${Math.min(styleSettings.headlineFontSize * 0.5, 32)}px`,
-                          wordBreak: 'break-word',
-                          maxWidth: '90%'
-                        }}
-                      >
-                        {applyTextCase(headline || 'TEMPLATE', styleSettings.headlineCasing)}
-                      </h2>
-
-                      <p
-                        onMouseDown={(e) => handleMouseDown(e, 'description')}
-                        onTouchStart={(e) => handleTouchStart(e, 'description')}
-                        className={`absolute leading-relaxed cursor-move select-none transition-shadow ${draggingElement === 'description' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
-                        style={{
-                          left: `${layoutSettings.description.x}%`,
-                          top: `${layoutSettings.description.y}%`,
-                          color: styleSettings.descriptionColor,
-                          fontFamily: `${styleSettings.descriptionFont}, sans-serif`,
-                          fontSize: `${Math.min(styleSettings.descriptionFontSize * 0.8, 14)}px`,
-                          wordBreak: 'break-word',
-                          maxWidth: '90%'
-                        }}
-                      >
-                        {applyTextCase(description || 'Your description will appear here...', styleSettings.descriptionCasing)}
-                      </p>
+                {isVideoGenerationInProgress && (
+                  <div className={`mb-4 rounded-lg border px-4 py-3 ${darkMode ? 'border-gray-700 bg-gray-900 text-gray-200' : 'border-gray-200 bg-white text-gray-700'}`}>
+                    <div className="flex items-center justify-between text-sm font-medium">
+                      <span>Video is processing...</span>
+                      {showVideoProgress && <span>{videoProgress}%</span>}
                     </div>
+                    {showVideoProgress && (
+                        <div className={`mt-2 h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                          <div
+                           className="h-full bg-red-500 transition-all duration-200"
+                           style={{ width: `${videoProgress}%` }}
+                         />
+                       </div>
+                    )}
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row justify-center gap-3 mb-4">
-              <button className={`flex items-center justify-center px-4 sm:px-6 py-2 rounded-lg text-sm font-medium border ${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
-                <Save className="w-4 h-4 mr-2" />
-                Save Draft
-              </button>
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating || !headline}
-                className="flex items-center justify-center px-4 sm:px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                {isGenerating ? `Creating... ${isMultiImageMode ? videoProgress + '%' : ''}` : 'Create Graphic'}
-              </button>
-            </div>
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row justify-center gap-3 mb-4">
+                  <button className={`flex items-center justify-center px-4 sm:px-6 py-2 rounded-lg text-sm font-medium border ${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Draft
+                  </button>
+                  <button
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !headline}
+                    className="flex items-center justify-center px-4 sm:px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    {generationPrimaryLabel}
+                  </button>
+                </div>
 
-            {/* Zoom Controls & Reset Layout */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <button
-                onClick={() => setLayoutSettings(defaultLayoutSettings)}
-                className={`w-full sm:w-auto p-2 rounded-lg text-xs flex items-center justify-center ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
-                title="Reset Layout"
-              >
-                <RotateCcw className="w-3 h-3 mr-1" />
-                Reset Layout
-              </button>
+                {/* Zoom Controls & Reset Layout */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                  <button
+                    onClick={() => setLayoutSettings(defaultLayoutSettings)}
+                    className={`w-full sm:w-auto p-2 rounded-lg text-xs flex items-center justify-center ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                    title="Reset Layout"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />
+                    Reset Layout
+                  </button>
 
-              <div className="w-full sm:w-auto flex items-center justify-center space-x-2">
-                <button
-                  onClick={() => setZoom(Math.max(50, zoom - 10))}
-                  className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-700 border border-gray-200'}`}>
-                  {zoom}%
-                </span>
-                <button
-                  onClick={() => setZoom(Math.min(150, zoom + 10))}
-                  className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+                  <div className="w-full sm:w-auto flex items-center justify-center space-x-2">
+                    <button
+                      onClick={() => setZoom(Math.max(50, zoom - 10))}
+                      className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-700 border border-gray-200'}`}>
+                      {zoom}%
+                    </span>
+                    <button
+                      onClick={() => setZoom(Math.min(150, zoom + 10))}
+                      className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <aside className={`hidden lg:block lg:w-80 2xl:w-96 rounded-xl border p-4 h-fit lg:sticky lg:top-24 ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
@@ -1135,7 +1329,7 @@ const App: React.FC = () => {
               Build, brand, and publish from one workspace
             </h2>
             <p className={`mt-4 max-w-3xl text-sm md:text-base reveal reveal-delay-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Newsbanao now includes full-site sections so visitors can understand your product, pricing, and workflow before entering the editor.
+              Newsbanana now includes full-site sections so visitors can understand your product, pricing, and workflow before entering the editor.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5 mt-10">
@@ -1260,11 +1454,11 @@ const App: React.FC = () => {
                   Open Creator Studio
                 </a>
                 <a
-                  href="mailto:hello@newsbanao.com"
+                  href="mailto:hello@newsbanana.com"
                   className={`inline-flex items-center justify-center rounded-lg px-5 py-3 text-sm font-medium border ${darkMode ? 'border-gray-700 text-gray-200 hover:bg-gray-900' : 'border-gray-300 text-gray-800 hover:bg-gray-50'}`}
                 >
                   <Mail className="w-4 h-4 mr-2" />
-                  hello@newsbanao.com
+                  hello@newsbanana.com
                 </a>
               </div>
             </div>
@@ -1277,10 +1471,10 @@ const App: React.FC = () => {
               <div className="bg-red-500 p-1.5 rounded-md">
                 <Newspaper className="w-4 h-4 text-white" />
               </div>
-              <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>newsbanao</span>
+              <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>newsbanana</span>
             </div>
             <p className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
-              Copyright {new Date().getFullYear()} newsbanao. All rights reserved.
+              Copyright {new Date().getFullYear()} newsbanana. All rights reserved.
             </p>
           </div>
         </footer>
@@ -1316,6 +1510,26 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Mobile Floating Upload */}
+        <div className="md:hidden fixed left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)+4.25rem)] z-[60]">
+          <button
+            type="button"
+            onClick={handleMobileUploadClick}
+            className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-xl border-4 border-white/20 flex items-center justify-center"
+            title="Upload image or video"
+            aria-label="Upload image or video"
+          >
+            <Upload className="w-6 h-6" />
+          </button>
+          <input
+            ref={mobileUploadInputRef}
+            type="file"
+            accept="image/*,video/*"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+        </div>
+
         {/* Mobile Bottom Bar */}
         <div className={`md:hidden fixed bottom-0 left-0 right-0 border-t px-2 sm:px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] flex justify-around z-50 ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}`}>
           <button
@@ -1341,7 +1555,7 @@ const App: React.FC = () => {
             className="flex flex-col items-center text-red-500 disabled:opacity-40"
           >
             <Plus className="w-5 h-5" />
-            <span className="text-xs mt-1">Create</span>
+            <span className="text-xs mt-1">{generationCompactLabel}</span>
           </button>
           <button
             onClick={handleDownload}
@@ -1350,13 +1564,6 @@ const App: React.FC = () => {
           >
             <Download className="w-5 h-5" />
             <span className="text-xs mt-1">Download</span>
-          </button>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`flex flex-col items-center ${darkMode ? 'text-yellow-400' : 'text-gray-600'}`}
-          >
-            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            <span className="text-xs mt-1">Theme</span>
           </button>
         </div>
       </div>

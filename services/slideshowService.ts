@@ -32,6 +32,18 @@ export const initFFmpeg = async (onProgress?: (progress: number) => void): Promi
     ffmpegLoaded = true;
 };
 
+// Helper to apply text casing
+const applyTextCase = (text: string, casing: 'uppercase' | 'lowercase' | 'sentence' | 'none' = 'none'): string => {
+    if (!text) return text;
+    switch (casing) {
+        case 'uppercase': return text.toUpperCase();
+        case 'lowercase': return text.toLowerCase();
+        case 'sentence': return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+        case 'none': return text;
+        default: return text;
+    }
+};
+
 /**
  * Helper to wrap text on canvas
  */
@@ -111,7 +123,8 @@ function drawNewsOverlay(
     ctx.shadowOffsetY = 2;
 
     const headlineLineHeight = styles.headlineFontSize + 10;
-    const headlineY = wrapText(ctx, headline.toUpperCase(), contentStartX, currentY, maxContentWidth, headlineLineHeight);
+    const displayHeadline = applyTextCase(headline, styles.headlineCasing);
+    const headlineY = wrapText(ctx, displayHeadline, contentStartX, currentY, maxContentWidth, headlineLineHeight);
     currentY = headlineY + 30;
 
     // Divider
@@ -124,7 +137,8 @@ function drawNewsOverlay(
     ctx.fillStyle = styles.descriptionColor;
     ctx.font = `${styles.descriptionFontSize}px ${styles.descriptionFont}`;
     const bodyLineHeight = styles.descriptionFontSize + 15;
-    wrapText(ctx, description, contentStartX, currentY, maxContentWidth, bodyLineHeight);
+    const displayDescription = applyTextCase(description, styles.descriptionCasing);
+    wrapText(ctx, displayDescription, contentStartX, currentY, maxContentWidth, bodyLineHeight);
 }
 
 /**
@@ -240,6 +254,7 @@ export const generateMultiImageVideo = async (
     description: string,
     styleSettings: StyleSettings,
     multiImageSettings: MultiImageSettings,
+    audioSource?: string, // Optional audio file (video or audio)
     onProgress?: (progress: number) => void
 ): Promise<string> => {
     if (images.length === 0) {
@@ -273,6 +288,26 @@ export const generateMultiImageVideo = async (
     } else {
         // Slideshow/KenBurns: each image for imageDuration seconds
         totalFrames = images.length * Math.floor(imageDuration * fps);
+    }
+
+    // Extract audio from source if provided
+    let hasAudio = false;
+    if (audioSource) {
+        try {
+            const audioBlob = await fetch(audioSource).then(r => r.blob());
+            const audioData = await fetchFile(audioBlob);
+            await ffmpeg.writeFile('source_audio.mp4', audioData);
+
+            // Extract audio track
+            await ffmpeg.exec(['-i', 'source_audio.mp4', '-vn', '-acodec', 'copy', 'audio.aac']);
+
+            // Check if audio was successfully extracted
+            const extractedAudio = await ffmpeg.readFile('audio.aac');
+            hasAudio = extractedAudio && (extractedAudio as Uint8Array).length > 0;
+        } catch (error) {
+            console.warn('Could not extract audio from source:', error);
+            hasAudio = false;
+        }
     }
 
     // Generate frames
@@ -345,15 +380,31 @@ export const generateMultiImageVideo = async (
         }
     }
 
-    // Encode video
-    await ffmpeg.exec([
-        '-framerate', String(fps),
-        '-i', 'frame%05d.png',
-        '-c:v', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        '-y',
-        'output.mp4'
-    ]);
+    // Encode video with or without audio
+    if (hasAudio) {
+        // Encode with audio
+        await ffmpeg.exec([
+            '-framerate', String(fps),
+            '-i', 'frame%05d.png',
+            '-i', 'audio.aac',
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-shortest', // Match duration to shortest stream
+            '-y',
+            'output.mp4'
+        ]);
+    } else {
+        // Encode without audio
+        await ffmpeg.exec([
+            '-framerate', String(fps),
+            '-i', 'frame%05d.png',
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-y',
+            'output.mp4'
+        ]);
+    }
 
     // Read output
     const outputData = await ffmpeg.readFile('output.mp4');
@@ -368,6 +419,10 @@ export const generateMultiImageVideo = async (
     }
     try {
         await ffmpeg.deleteFile('output.mp4');
+        if (hasAudio) {
+            await ffmpeg.deleteFile('audio.aac');
+            await ffmpeg.deleteFile('source_audio.mp4');
+        }
     } catch { /* ignore */ }
 
     if (onProgress) onProgress(100);

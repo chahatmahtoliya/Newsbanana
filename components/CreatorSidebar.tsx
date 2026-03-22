@@ -133,7 +133,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
             {/* Icon Bar - Always visible */}
             <div className={`
         flex flex-col items-center py-4 px-2 
-        ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}
+        ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}
         border-r transition-all duration-300
         ${isExpanded ? 'w-16' : 'w-16'}
       `}>
@@ -142,7 +142,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                     onClick={() => setIsExpanded(!isExpanded)}
                     className={`
             p-2 rounded-lg mb-4 transition-all
-            ${darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'}
+            ${darkMode ? 'hover:bg-gray-900 text-gray-400' : 'hover:bg-gray-100 text-gray-600'}
           `}
                     title={isExpanded ? 'Collapse' : 'Expand'}
                 >
@@ -161,7 +161,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                 ${activePanel === category.id
                                     ? `${category.color} text-white shadow-lg scale-105`
                                     : darkMode
-                                        ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                                        ? 'hover:bg-gray-900 text-gray-400 hover:text-white'
                                         : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
                                 }
               `}
@@ -181,7 +181,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                   absolute left-full ml-2 px-2 py-1 rounded text-xs font-medium
                   opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none
                   whitespace-nowrap z-50
-                  ${darkMode ? 'bg-gray-800 text-white' : 'bg-gray-900 text-white'}
+                  ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-900 text-white'}
                 `}>
                                     {category.label}
                                 </div>
@@ -195,7 +195,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                     className={`
             w-12 h-12 rounded-xl flex flex-col items-center justify-center mt-4
             transition-all duration-200
-            ${darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'}
+            ${darkMode ? 'hover:bg-gray-900 text-gray-400' : 'hover:bg-gray-100 text-gray-600'}
           `}
                     title="Projects"
                 >
@@ -207,7 +207,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
             {/* Expandable Panel */}
             <div className={`
         overflow-hidden transition-all duration-300 ease-in-out
-        ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}
+        ${darkMode ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}
         ${isExpanded && activePanel ? 'w-64 border-r' : 'w-0'}
       `}>
                 {activePanel && (

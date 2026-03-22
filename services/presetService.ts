@@ -199,7 +199,9 @@ export function applyPreset(preset: StylePreset): StyleSettings {
         descriptionColor: preset.colors.description,
         bannerColor: preset.colors.banner,
         headlineFont: preset.fonts.headline,
-        descriptionFont: preset.fonts.description
+        descriptionFont: preset.fonts.description,
+        headlineCasing: 'uppercase',
+        descriptionCasing: 'sentence'
     };
 }
 

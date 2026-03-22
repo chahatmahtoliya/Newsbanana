@@ -172,7 +172,7 @@ export const generateNewsVideo = async (
     });
 
     const duration = video.duration;
-    const fps = 30; // Target FPS
+    const fps = 24; // Reduced from 30 for faster processing
     const totalFrames = Math.floor(duration * fps);
 
     // Set standard dimensions
@@ -185,8 +185,9 @@ export const generateNewsVideo = async (
     canvas.height = targetHeight;
     const ctx = canvas.getContext('2d')!;
 
-    // Process each frame
-    for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
+    // Process frames - sample every Nth frame for speed
+    const frameStep = 2; // Process every 2nd frame for 2x speed
+    for (let frameIndex = 0; frameIndex < totalFrames; frameIndex += frameStep) {
         const time = frameIndex / fps;
         video.currentTime = time;
 
@@ -210,7 +211,7 @@ export const generateNewsVideo = async (
             canvas.toBlob((blob) => resolve(blob!), 'image/png');
         });
         const frameData = await fetchFile(frameBlob);
-        const frameFileName = `frame${String(frameIndex).padStart(5, '0')}.png`;
+        const frameFileName = `frame${String(Math.floor(frameIndex / frameStep)).padStart(5, '0')}.png`;
         await ffmpeg.writeFile(frameFileName, frameData);
 
         // Update progress (frame extraction phase: 0-50%)
@@ -238,10 +239,12 @@ export const generateNewsVideo = async (
 
     if (hasAudio) {
         await ffmpeg.exec([
-            '-framerate', String(fps),
+            '-framerate', String(fps / frameStep), // Adjust FPS for frame stepping
             '-i', 'frame%05d.png',
             '-i', 'audio.aac',
             '-c:v', 'libx264',
+            '-preset', 'ultrafast', // Faster encoding
+            '-crf', '28', // Slightly lower quality for speed
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac',
             '-shortest',
@@ -250,9 +253,11 @@ export const generateNewsVideo = async (
         ]);
     } else {
         await ffmpeg.exec([
-            '-framerate', String(fps),
+            '-framerate', String(fps / frameStep),
             '-i', 'frame%05d.png',
             '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-crf', '28',
             '-pix_fmt', 'yuv420p',
             '-y',
             'output.mp4'
@@ -266,7 +271,8 @@ export const generateNewsVideo = async (
     const outputUrl = URL.createObjectURL(outputBlob);
 
     // Cleanup - delete temporary files
-    for (let i = 0; i < totalFrames; i++) {
+    const actualFrames = Math.ceil(totalFrames / frameStep);
+    for (let i = 0; i < actualFrames; i++) {
         const frameFileName = `frame${String(i).padStart(5, '0')}.png`;
         try {
             await ffmpeg.deleteFile(frameFileName);
