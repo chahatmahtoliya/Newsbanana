@@ -808,6 +808,7 @@ const App: React.FC = () => {
               {[
                 { href: '#studio', label: 'Studio' },
                 { href: '#features', label: 'Features' },
+                { href: '/blogs/', label: 'Blog' },
                 { href: '#pricing', label: 'Pricing' },
                 { href: '#faq', label: 'FAQ' },
                 { href: '#contact', label: 'Contact' },
@@ -1476,6 +1477,9 @@ const App: React.FC = () => {
             <p className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
               Copyright {new Date().getFullYear()} newsbanana. All rights reserved.
             </p>
+            <a href="/blogs/flipkart-big-billion-days-2026-sale-date/" className={`text-sm ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
+              Latest sale update
+            </a>
           </div>
         </footer>
 
