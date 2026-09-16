@@ -1,5 +1,7 @@
 // This service now handles local canvas generation instead of AI APIs
 import { StyleSettings, SocialMediaSizePreset, socialMediaSizes, LayoutSettings } from '../types';
+import { getDefaultTemplate, Template, TemplateTheme } from './templateService';
+import { drawCodeTemplate } from './templateRenderer';
 
 // Helper to apply text casing
 const applyTextCase = (text: string, casing: 'uppercase' | 'lowercase' | 'sentence' | 'none' = 'none'): string => {
@@ -24,24 +26,24 @@ function wrapText(
   maxWidth: number,
   lineHeight: number
 ): number {
-  const words = text.split(' ');
-  let line = '';
   let currentY = y;
-
-  for (let n = 0; n < words.length; n++) {
-    const testLine = line + words[n] + ' ';
-    const metrics = ctx.measureText(testLine);
-    const testWidth = metrics.width;
-    if (testWidth > maxWidth && n > 0) {
-      ctx.fillText(line, x, currentY);
-      line = words[n] + ' ';
-      currentY += lineHeight;
-    } else {
-      line = testLine;
+  for (const paragraph of text.split('\n')) {
+    let line = '';
+    for (const word of paragraph.split(/\s+/)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(candidate).width > maxWidth) {
+        ctx.fillText(line, x, currentY); currentY += lineHeight; line = '';
+      }
+      for (const character of (line ? ` ${word}` : word)) {
+        if (line && ctx.measureText(line + character).width > maxWidth) {
+          ctx.fillText(line, x, currentY); currentY += lineHeight; line = '';
+        }
+        line += character;
+      }
     }
+    ctx.fillText(line, x, currentY); currentY += lineHeight;
   }
-  ctx.fillText(line, x, currentY);
-  return currentY + lineHeight;
+  return currentY;
 }
 
 /**
@@ -99,12 +101,12 @@ export const generateNewsCreative = async (
   layoutSettings?: LayoutSettings,
   logoImage?: string | null,
   logoSize: number = 90,
-  logoPosition?: { x: number; y: number }
+  logoPosition?: { x: number; y: number },
+  template: Template = getDefaultTemplate(),
+  templateTheme?: TemplateTheme,
+  bannerText: string = template.defaultBanner,
+  showBanner: boolean = true
 ): Promise<string> => {
-  if (!uploadedMedia) {
-    throw new Error("Background media is required");
-  }
-
   // Default style settings
   const styles: StyleSettings = styleSettings || {
     headlineFontSize: 90,
@@ -118,15 +120,18 @@ export const generateNewsCreative = async (
     descriptionCasing: 'sentence',
   };
 
-  // Ensure fonts are loaded before drawing so metrics are accurate
-  await document.fonts.ready;
-
+  // Explicitly request the chosen faces; unused picker fonts may not have loaded yet.
+  await Promise.all([
+    document.fonts.load(`700 ${styles.headlineFontSize}px "${styles.headlineFont}"`),
+    document.fonts.load(`${styles.descriptionFontSize}px "${styles.descriptionFont}"`),
+    document.fonts.load('500 34px Manrope'),
+  ]).catch(() => undefined);
   // Get the source image (either directly or from video frame)
-  let sourceImage: HTMLImageElement;
+  let sourceImage: HTMLImageElement | null = null;
 
-  if (mediaType === 'video') {
+  if (uploadedMedia && mediaType === 'video') {
     sourceImage = await extractVideoFrame(uploadedMedia, videoTimestamp);
-  } else {
+  } else if (uploadedMedia) {
     sourceImage = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
@@ -164,21 +169,15 @@ export const generateNewsCreative = async (
       canvas.height = targetHeight;
 
       // 1. Draw Background Image (Object-Cover style)
-      const scale = Math.max(targetWidth / sourceImage.width, targetHeight / sourceImage.height);
-      const x = (targetWidth / 2) - (sourceImage.width / 2) * scale;
-      const y = (targetHeight / 2) - (sourceImage.height / 2) * scale;
+      if (sourceImage) {
+        const scale = Math.max(targetWidth / sourceImage.width, targetHeight / sourceImage.height);
+        const x = (targetWidth / 2) - (sourceImage.width / 2) * scale;
+        const y = (targetHeight / 2) - (sourceImage.height / 2) * scale;
+        ctx.drawImage(sourceImage, x, y, sourceImage.width * scale, sourceImage.height * scale);
+      }
 
-      ctx.drawImage(sourceImage, x, y, sourceImage.width * scale, sourceImage.height * scale);
-
-      // 2. Add Vignette/Gradient Overlay
-      // Dark gradient at the bottom for text readability
-      const gradient = ctx.createLinearGradient(0, targetHeight * 0.4, 0, targetHeight);
-      gradient.addColorStop(0, "rgba(0,0,0,0)");
-      gradient.addColorStop(0.6, "rgba(0,0,0,0.8)");
-      gradient.addColorStop(1, "rgba(0,0,0,0.95)");
-
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, targetWidth, targetHeight);
+      // Code-rendered template artwork is shared with the live preview.
+      drawCodeTemplate(ctx, template, templateTheme || template.theme, targetWidth, targetHeight, Boolean(sourceImage));
 
       // 3. Draw logo if provided
       if (logoAsset) {
@@ -214,16 +213,15 @@ export const generateNewsCreative = async (
       }
 
       ctx.font = `bold ${bannerFontSize}px Oswald`;
-      const bannerText = "BREAKING NEWS";
-      const bannerMetrics = ctx.measureText(bannerText);
-      const bannerWidth = bannerMetrics.width + (bannerPadding * 2);
-
-      ctx.fillStyle = styles.bannerColor;
-      ctx.fillRect(bannerX, bannerY, bannerWidth, bannerHeight);
-
-      ctx.fillStyle = "#FFFFFF";
-      ctx.textBaseline = "middle";
-      ctx.fillText(bannerText, bannerX + bannerPadding, bannerY + (bannerHeight / 2) + 2);
+      if (showBanner && bannerText) {
+        const bannerMetrics = ctx.measureText(bannerText);
+        const bannerWidth = bannerMetrics.width + (bannerPadding * 2);
+        ctx.fillStyle = styles.bannerColor;
+        ctx.fillRect(bannerX, bannerY, bannerWidth, bannerHeight);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.textBaseline = "middle";
+        ctx.fillText(bannerText, bannerX + bannerPadding, bannerY + (bannerHeight / 2) + 2);
+      }
 
       // 5. Headline Setup (Using layout settings)
       let headlineX = 60;
@@ -234,18 +232,18 @@ export const generateNewsCreative = async (
         headlineY = (targetHeight * layoutSettings.headline.y) / 100;
       }
 
-      const maxHeadlineWidth = targetWidth - headlineX - 40; // 40px right margin
+      const maxHeadlineWidth = Math.min(targetWidth - headlineX - targetWidth * .04, targetWidth * (template.headlineWidth || 88) / 100);
 
       // Draw Headline with dynamic styling
       ctx.fillStyle = styles.headlineColor;
       ctx.font = `bold ${styles.headlineFontSize}px ${styles.headlineFont}`;
       ctx.textBaseline = "top";
       ctx.shadowColor = "rgba(0,0,0,0.5)";
-      ctx.shadowBlur = 10;
-      ctx.shadowOffsetX = 2;
-      ctx.shadowOffsetY = 2;
+      ctx.shadowBlur = template.reference ? 0 : 10;
+      ctx.shadowOffsetX = template.reference ? 0 : 2;
+      ctx.shadowOffsetY = template.reference ? 0 : 2;
 
-      const headlineLineHeight = styles.headlineFontSize + 10;
+      const headlineLineHeight = styles.headlineFontSize * 1.1;
       const displayHeadline = applyTextCase(headline, styles.headlineCasing);
       wrapText(ctx, displayHeadline, headlineX, headlineY, maxHeadlineWidth, headlineLineHeight);
 
@@ -258,11 +256,11 @@ export const generateNewsCreative = async (
         descY = (targetHeight * layoutSettings.description.y) / 100;
       }
 
-      const maxDescWidth = targetWidth - descX - 40; // 40px right margin
+      const maxDescWidth = Math.min(targetWidth - descX - targetWidth * .04, targetWidth * (template.descriptionWidth || 88) / 100);
 
       ctx.fillStyle = styles.descriptionColor;
       ctx.font = `${styles.descriptionFontSize}px ${styles.descriptionFont}`;
-      const bodyLineHeight = styles.descriptionFontSize + 15;
+      const bodyLineHeight = styles.descriptionFontSize * 1.45;
 
       const displayDescription = applyTextCase(description, styles.descriptionCasing);
       wrapText(ctx, displayDescription, descX, descY, maxDescWidth, bodyLineHeight);

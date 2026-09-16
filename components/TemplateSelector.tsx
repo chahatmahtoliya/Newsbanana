@@ -1,6 +1,7 @@
 import React from 'react';
 import { Layout } from 'lucide-react';
 import { TEMPLATES, Template, TemplateType } from '../services/templateService';
+import TemplateThumbnail from './TemplateThumbnail';
 
 interface TemplateSelectorProps {
     selected: TemplateType;
@@ -35,7 +36,9 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ selected, on
                                         : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:border-gray-600'
                                     }`}
                             >
-                                <div className="text-xl mb-1">{template.icon}</div>
+                                <div className="relative aspect-[2/3] mb-2 overflow-hidden rounded">
+                                    <TemplateThumbnail template={template} />
+                                </div>
                                 <div className="text-xs font-medium truncate">{template.name}</div>
                             </button>
                         ))}

@@ -15,19 +15,32 @@ import {
     FolderOpen,
     Sparkles
 } from 'lucide-react';
+import TemplateThumbnail from './TemplateThumbnail';
+import { Template, TEMPLATES } from '../services/templateService';
+import ElementsPanel from './ElementsPanel';
+import { CanvasOverlay } from '../types';
+
 
 interface SidebarCategory {
     id: string;
     label: string;
     icon: React.ReactNode;
     color: string;
-    items?: { id: string; name: string; thumbnail?: string }[];
 }
 
 interface CreatorSidebarProps {
     darkMode: boolean;
     onCategorySelect: (categoryId: string) => void;
     selectedCategory: string | null;
+    onTemplateSelect?: (template: Template) => void;
+    onAddOverlay?: (overlay: Omit<CanvasOverlay, 'id' | 'x' | 'y'>) => void;
+}
+
+
+interface SidebarItem {
+    id: string;
+    name: string;
+    template?: Template;
 }
 
 const SIDEBAR_CATEGORIES: SidebarCategory[] = [
@@ -35,87 +48,82 @@ const SIDEBAR_CATEGORIES: SidebarCategory[] = [
         id: 'home',
         label: 'Home',
         icon: <Home className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-purple-500 to-pink-500'
+        color: 'bg-stone-800'
     },
     {
         id: 'templates',
         label: 'Templates',
         icon: <Layout className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-blue-500 to-cyan-500'
+        color: 'bg-red-500'
     },
     {
         id: 'images',
         label: 'Images',
         icon: <Image className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-green-500 to-emerald-500'
+        color: 'bg-amber-600'
     },
     {
         id: 'videos',
         label: 'Videos',
         icon: <Video className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-red-500 to-orange-500'
+        color: 'bg-red-700'
     },
     {
         id: 'meme-templates',
         label: 'Meme Templates',
         icon: <Smile className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-yellow-400 to-orange-500'
+        color: 'bg-orange-600'
     },
     {
         id: 'video-templates',
         label: 'Video Templates',
         icon: <Film className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-indigo-500 to-purple-500'
+        color: 'bg-stone-700'
     },
     {
         id: 'text',
         label: 'Text',
         icon: <Type className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-slate-500 to-gray-600'
+        color: 'bg-zinc-700'
     },
     {
         id: 'elements',
         label: 'Elements',
         icon: <Shapes className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-teal-500 to-cyan-500'
+        color: 'bg-orange-700'
     },
     {
         id: 'uploads',
         label: 'Uploads',
         icon: <Upload className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-violet-500 to-purple-600'
+        color: 'bg-stone-600'
     },
     {
         id: 'ai',
         label: 'AI Magic',
         icon: <Sparkles className="w-5 h-5" />,
-        color: 'bg-gradient-to-br from-pink-500 to-rose-500'
+        color: 'bg-rose-700'
     },
 ];
 
 // Sample template data for each category
-const TEMPLATE_DATA: Record<string, { id: string; name: string; thumbnail: string }[]> = {
-    'templates': [
-        { id: 't1', name: 'Breaking News', thumbnail: '/templates/template_breaking_news_1769538066288.png' },
-        { id: 't2', name: 'Quote Card', thumbnail: '/templates/template_quote_card_1769538092996.png' },
-        { id: 't3', name: 'Sports Score', thumbnail: '/templates/template_sports_score_1769538110413.png' },
-        { id: 't4', name: 'Announcement', thumbnail: '/templates/template_announcement_1769538128393.png' },
-    ],
+const TEMPLATE_DATA: Record<string, SidebarItem[]> = {
+    'templates': TEMPLATES.map(template => ({ id: template.id, name: template.name, template })),
     'meme-templates': [
-        { id: 'm1', name: 'Viral Meme', thumbnail: '' },
-        { id: 'm2', name: 'Reaction Meme', thumbnail: '' },
-        { id: 'm3', name: 'Quote Meme', thumbnail: '' },
-        { id: 'm4', name: 'Comparison', thumbnail: '' },
+        { id: 'm1', name: 'Viral Meme' },
+        { id: 'm2', name: 'Reaction Meme' },
+        { id: 'm3', name: 'Quote Meme' },
+        { id: 'm4', name: 'Comparison' },
     ],
     'video-templates': [
-        { id: 'v1', name: 'News Intro', thumbnail: '' },
-        { id: 'v2', name: 'Story Reel', thumbnail: '' },
-        { id: 'v3', name: 'Slideshow', thumbnail: '' },
-        { id: 'v4', name: 'Ken Burns', thumbnail: '' },
+        { id: 'v1', name: 'News Intro' },
+        { id: 'v2', name: 'Story Reel' },
+        { id: 'v3', name: 'Slideshow' },
+        { id: 'v4', name: 'Ken Burns' },
     ],
 };
 
-const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySelect, selectedCategory }) => {
+const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySelect, selectedCategory, onTemplateSelect, onAddOverlay }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const [activePanel, setActivePanel] = useState<string | null>(null);
 
@@ -128,12 +136,13 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
         }
     };
 
+
     return (
         <div className="flex h-full">
             {/* Icon Bar - Always visible */}
             <div className={`
         flex flex-col items-center py-4 px-2 
-        ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}
+        ${darkMode ? 'bg-[#0b0d14] border-[#1e2235]' : 'bg-white border-slate-200'}
         border-r transition-all duration-300
         ${isExpanded ? 'w-16' : 'w-16'}
       `}>
@@ -142,7 +151,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                     onClick={() => setIsExpanded(!isExpanded)}
                     className={`
             p-2 rounded-lg mb-4 transition-all
-            ${darkMode ? 'hover:bg-gray-900 text-gray-400' : 'hover:bg-gray-100 text-gray-600'}
+            ${darkMode ? 'hover:bg-[#161a28] text-slate-400' : 'hover:bg-slate-100 text-slate-600'}
           `}
                     title={isExpanded ? 'Collapse' : 'Expand'}
                 >
@@ -161,8 +170,8 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                 ${activePanel === category.id
                                     ? `${category.color} text-white shadow-lg scale-105`
                                     : darkMode
-                                        ? 'hover:bg-gray-900 text-gray-400 hover:text-white'
-                                        : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                                        ? 'hover:bg-[#161a28] text-slate-400 hover:text-white'
+                                        : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
                                 }
               `}
                             title={category.label}
@@ -178,10 +187,10 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                             {/* Tooltip on hover when collapsed */}
                             {!isExpanded && (
                                 <div className={`
-                  absolute left-full ml-2 px-2 py-1 rounded text-xs font-medium
+                  absolute left-full ml-2 px-2 py-1 rounded-md text-xs font-medium
                   opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none
-                  whitespace-nowrap z-50
-                  ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-900 text-white'}
+                  whitespace-nowrap z-50 shadow-lg
+                  ${darkMode ? 'bg-[#181c2b] text-white border border-[#2a304a]' : 'bg-slate-900 text-white'}
                 `}>
                                     {category.label}
                                 </div>
@@ -195,7 +204,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                     className={`
             w-12 h-12 rounded-xl flex flex-col items-center justify-center mt-4
             transition-all duration-200
-            ${darkMode ? 'hover:bg-gray-900 text-gray-400' : 'hover:bg-gray-100 text-gray-600'}
+            ${darkMode ? 'hover:bg-[#161a28] text-slate-400' : 'hover:bg-slate-100 text-slate-600'}
           `}
                     title="Projects"
                 >
@@ -207,7 +216,7 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
             {/* Expandable Panel */}
             <div className={`
         overflow-hidden transition-all duration-300 ease-in-out
-        ${darkMode ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}
+        ${darkMode ? 'bg-[#0f111a] border-[#1e2235]' : 'bg-slate-50 border-slate-200'}
         ${isExpanded && activePanel ? 'w-64 border-r' : 'w-0'}
       `}>
                 {activePanel && (
@@ -215,93 +224,100 @@ const CreatorSidebar: React.FC<CreatorSidebarProps> = ({ darkMode, onCategorySel
                         {/* Panel Header */}
                         <div className={`
               px-4 py-3 border-b flex items-center justify-between
-              ${darkMode ? 'border-gray-700' : 'border-gray-200'}
+              ${darkMode ? 'border-[#1e2235]' : 'border-slate-200'}
             `}>
-                            <h3 className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            <h3 className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                                 {SIDEBAR_CATEGORIES.find(c => c.id === activePanel)?.label}
                             </h3>
                             <button
                                 onClick={() => setActivePanel(null)}
-                                className={`p-1 rounded ${darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                                className={`p-1 rounded ${darkMode ? 'hover:bg-[#1e2235] text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
                             >
                                 <ChevronLeft className="w-4 h-4" />
                             </button>
                         </div>
 
                         {/* Panel Content */}
-                        <div className="flex-1 overflow-y-auto p-3">
-                            {/* Search Bar */}
-                            <div className={`
-                mb-3 relative
-              `}>
-                                <input
-                                    type="text"
-                                    placeholder={`Search ${SIDEBAR_CATEGORIES.find(c => c.id === activePanel)?.label.toLowerCase()}...`}
-                                    className={`
+                        <div className={`flex-1 overflow-y-auto ${activePanel === 'elements' ? 'p-0' : 'p-3'}`}>
+                            {activePanel === 'elements' ? (
+                                <ElementsPanel
+                                    darkMode={darkMode}
+                                    onAddOverlay={overlay => onAddOverlay?.(overlay)}
+                                />
+                            ) : (
+                                <>
+                                    {/* Search Bar */}
+                                    <div className="mb-3 relative">
+                                        <input
+                                            type="text"
+                                            placeholder={`Search ${SIDEBAR_CATEGORIES.find(c => c.id === activePanel)?.label.toLowerCase()}...`}
+                                            className={`
                     w-full px-3 py-2 rounded-lg text-sm
                     ${darkMode
-                                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                        }
-                    border focus:outline-none focus:border-purple-500
+                                                    ? 'bg-[#0b0e18] border-[#22273c] text-white placeholder-slate-500'
+                                                    : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                                                }
+                    border focus:outline-none focus:border-red-500
                   `}
-                                />
-                            </div>
-
-                            {/* Template Grid */}
-                            {TEMPLATE_DATA[activePanel] ? (
-                                <div className="grid grid-cols-2 gap-2">
-                                    {TEMPLATE_DATA[activePanel].map((item) => (
-                                        <button
-                                            key={item.id}
-                                            className={`
-                        aspect-square rounded-lg overflow-hidden border-2 transition-all
-                        hover:border-purple-500 hover:scale-105
-                        ${darkMode ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-white'}
-                      `}
-                                        >
-                                            {item.thumbnail ? (
-                                                <img
-                                                    src={item.thumbnail}
-                                                    alt={item.name}
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                        (e.target as HTMLImageElement).style.display = 'none';
-                                                    }}
-                                                />
-                                            ) : (
-                                                <div className={`
-                          w-full h-full flex items-center justify-center
-                          ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}
-                        `}>
-                                                    <span className={`text-xs text-center px-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                                        {item.name}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className={`
-                  text-center py-8
-                  ${darkMode ? 'text-gray-400' : 'text-gray-500'}
-                `}>
-                                    <div className={`
-                    w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center
-                    ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}
-                  `}>
-                                        {SIDEBAR_CATEGORIES.find(c => c.id === activePanel)?.icon}
+                                        />
                                     </div>
-                                    <p className="text-sm font-medium mb-1">
-                                        {SIDEBAR_CATEGORIES.find(c => c.id === activePanel)?.label}
-                                    </p>
-                                    <p className="text-xs opacity-70">
-                                        Coming soon...
-                                    </p>
-                                </div>
+
+                                    {/* Template Grid */}
+                                    {TEMPLATE_DATA[activePanel] ? (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {TEMPLATE_DATA[activePanel].map((item) => (
+                                                <button
+                                                    key={item.id}
+                                                    title={item.name}
+                                                    aria-label={item.name}
+                                                    onClick={() => item.template && onTemplateSelect?.(item.template)}
+                                                    className={`
+                        aspect-[2/3] rounded-lg overflow-hidden border transition-all
+                        hover:border-red-500 hover:scale-105
+                        ${darkMode ? 'border-[#22273c] bg-[#141724]' : 'border-slate-200 bg-white'}
+                      `}
+                                                >
+                                                    {item.template ? (
+                                                        <div className="relative w-full h-full">
+                                                            <TemplateThumbnail template={item.template} />
+
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`
+                          w-full h-full flex items-center justify-center
+                          ${darkMode ? 'bg-[#141724]' : 'bg-slate-100'}
+                        `}>
+                                                            <span className={`text-xs text-center px-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                                                {item.name}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className={`
+                  text-center py-8
+                  ${darkMode ? 'text-slate-400' : 'text-slate-500'}
+                `}>
+                                            <div className={`
+                    w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center
+                    ${darkMode ? 'bg-[#141724]' : 'bg-slate-200'}
+                  `}>
+                                                {SIDEBAR_CATEGORIES.find(c => c.id === activePanel)?.icon}
+                                            </div>
+                                            <p className="text-sm font-medium mb-1">
+                                                {SIDEBAR_CATEGORIES.find(c => c.id === activePanel)?.label}
+                                            </p>
+                                            <p className="text-xs opacity-70">
+                                                Coming soon...
+                                            </p>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
+
                     </div>
                 )}
             </div>

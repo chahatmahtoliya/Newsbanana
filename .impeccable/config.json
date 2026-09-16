@@ -1,0 +1,53 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-09-14T07:31:50.445Z",
+        "reason": "User confirmed: requested a comprehensive modern and trending font selector; Inter is an optional creative choice, not the interface identity"
+      },
+      {
+        "rule": "overused-font",
+        "value": "roboto",
+        "createdAt": "2026-09-14T07:31:51.807Z",
+        "reason": "User confirmed: requested a comprehensive modern and trending font selector; Roboto is an optional creative choice, not the interface identity"
+      },
+      {
+        "rule": "overused-font",
+        "value": "fraunces",
+        "createdAt": "2026-09-14T07:31:53.089Z",
+        "reason": "User confirmed: requested a comprehensive modern and trending font selector; Fraunces is an optional creative choice, not the interface identity"
+      },
+      {
+        "rule": "overused-font",
+        "value": "instrument sans",
+        "createdAt": "2026-09-14T07:31:54.221Z",
+        "reason": "User confirmed: requested a comprehensive modern and trending font selector; Instrument Sans is an optional creative choice, not the interface identity"
+      },
+      {
+        "rule": "overused-font",
+        "value": "plus jakarta sans",
+        "createdAt": "2026-09-14T07:31:55.426Z",
+        "reason": "User confirmed: requested a comprehensive modern and trending font selector; Plus Jakarta Sans is an optional creative choice, not the interface identity"
+      },
+      {
+        "rule": "overused-font",
+        "value": "space grotesk",
+        "createdAt": "2026-09-14T07:31:56.653Z",
+        "reason": "User confirmed: requested a comprehensive modern and trending font selector; Space Grotesk is an optional creative choice, not the interface identity"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "App.tsx"
+        ],
+        "createdAt": "2026-09-15T11:13:39.273Z",
+        "reason": "Agent reviewed both findings: colored red states use text-white; gray text occurs only on neutral gray or white backgrounds in conditional branches."
+      }
+    ]
+  }
+}

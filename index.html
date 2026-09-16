@@ -1,117 +1,162 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>newsbanana</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts - Extended Collection -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Ncreative - Create breaking news graphics in seconds</title>
+    <!-- Google Fonts - Albert Sans & Extended Collection -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=Bebas+Neue&family=Black+Ops+One&family=Bungee&family=Caveat:wght@400;700&family=Chakra+Petch:wght@400;600;700&family=Cinzel:wght@400;700&family=Concert+One&family=Dancing+Script:wght@400;700&family=Fredoka:wght@400;600;700&family=Great+Vibes&family=IBM+Plex+Mono:wght@400;500;600&family=Impact&family=Inter:wght@400;600;800&family=Lato:wght@400;700&family=Lobster&family=Montserrat:wght@400;600;800&family=Nunito:wght@400;700&family=Open+Sans:wght@400;600;700&family=Orbitron:wght@400;700&family=Oswald:wght@500;700&family=Pacifico&family=Permanent+Marker&family=Playfair+Display:wght@400;700&family=Poppins:wght@400;600;700&family=Press+Start+2P&family=Raleway:wght@400;600;700&family=Roboto:wght@400;700&family=Rubik:wght@400;600;700&family=Russo+One&family=Satisfy&family=Secular+One&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Staatliches&family=Teko:wght@400;600;700&family=Titan+One&family=Ubuntu:wght@400;700&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Space Grotesk', 'Inter', 'sans-serif'],
-              display: ['Oswald', 'sans-serif'],
-              mono: ['IBM Plex Mono', 'monospace'],
-            },
-            colors: {
-              news: {
-                red: '#D90000',
-                dark: '#111111',
-                gray: '#2A2A2A',
-              },
-              codex: {
-                ink: '#06111A',
-                panel: '#0D1B26',
-                line: '#193244',
-                mint: '#7EF7D4',
-                cyan: '#5BC0EB',
-                glow: '#C7FFF2',
-                slate: '#98A8B8'
-              }
-            }
-          },
-        },
-      }
-    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,300..900;1,300..900&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=Bebas+Neue&family=Black+Ops+One&family=Bungee&family=Caveat:wght@400;700&family=Chakra+Petch:wght@400;600;700&family=Cinzel:wght@400;700&family=Concert+One&family=Dancing+Script:wght@400;700&family=Fredoka:wght@400;600;700&family=Great+Vibes&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;600;800&family=Lato:wght@400;700&family=Lobster&family=Montserrat:wght@400;600;800&family=Nunito:wght@400;700&family=Open+Sans:wght@400;600;700&family=Orbitron:wght@400;700&family=Oswald:wght@500;700&family=Pacifico&family=Permanent+Marker&family=Playfair+Display:wght@400;700&family=Poppins:wght@400;600;700&family=Press+Start+2P&family=Raleway:wght@400;600;700&family=Roboto:wght@400;700&family=Rubik:wght@400;600;700&family=Russo+One&family=Satisfy&family=Secular+One&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Staatliches&family=Teko:wght@400;600;700&family=Titan+One&family=Ubuntu:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="https://fonts.googleapis.com/css2?family=Anybody:wght@400;600;800&family=Archivo+Black&family=Big+Shoulders+Display:wght@600;800;900&family=Bricolage+Grotesque:wght@400;600;800&family=DM+Sans:wght@400;600;800&family=Figtree:wght@400;600;800&family=Gabarito:wght@400;600;800&family=Hanken+Grotesk:wght@400;600;800&family=Instrument+Sans:wght@400;600;700&family=League+Spartan:wght@500;700;800&family=Manrope:wght@400;600;800&family=Onest:wght@400;600;800&family=Outfit:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=Red+Hat+Display:wght@400;600;800&family=Schibsted+Grotesk:wght@400;600;800&family=Sora:wght@400;600;800&family=Syne:wght@400;600;800&family=Unbounded:wght@400;600;800&family=Urbanist:wght@400;600;800&family=Wix+Madefor+Display:wght@400;600;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Bodoni+Moda:opsz,wght@6..96,400;6..96,700&family=Cormorant+Garamond:wght@400;600;700&family=DM+Mono:wght@400;500&family=DM+Serif+Display&family=Fraunces:opsz,wght@9..144,400;9..144,700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;600;700&family=Libre+Baskerville:wght@400;700&family=Lora:wght@400;600;700&family=Merriweather:wght@400;700;900&family=Newsreader:opsz,wght@6..72,400;6..72,700&family=Noto+Serif+Display:wght@400;600;700&family=Prata&family=Roboto+Mono:wght@400;600;700&family=Space+Mono:wght@400;700&family=Young+Serif&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+
+    <link rel="stylesheet" href="/index.css">
     <style>
       :root {
+        color-scheme: light dark;
+        --font-albert-sans: "Albert Sans", ui-sans-serif, system-ui, sans-serif;
+        --paper: #FAF9F5;
+        --paper-deep: #F4F0E8;
+        --surface: #FFFFFF;
+        --surface-soft: #F4F0E8;
+        --fill: #EAE4D6;
+        --ink: #141413;
+        --ink-soft: #524E48;
+        --ink-muted: #7A756D;
+        --ink-faint: #B5ADA1;
+        --line: #E5DFD1;
+        --line-soft: #EFEAE0;
+        --accent: #E11D48;
+        --accent-bright: #F43F5E;
+        --shadow-bedo: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px -2px rgba(0,0,0,0.08), 0 16px 40px -12px rgba(0,0,0,0.12);
+      }
+      .dark, html.dark {
         color-scheme: dark;
+        --paper: #0B0B0D;
+        --paper-deep: #121216;
+        --surface: #131317;
+        --surface-soft: #181820;
+        --fill: #1E1E26;
+        --ink: #F4F4F5;
+        --ink-soft: #B9BCC2;
+        --ink-muted: #8A8E96;
+        --ink-faint: #3F3F48;
+        --line: #27272E;
+        --line-soft: #1C1C22;
+        --accent: #EF4444;
+        --accent-bright: #F87171;
+        --shadow-bedo: 0 1px 2px rgba(0,0,0,0.4), 0 4px 12px -2px rgba(0,0,0,0.5), 0 16px 40px -12px rgba(0,0,0,0.6);
       }
       html {
         scroll-behavior: smooth;
+        scroll-padding-top: 5rem;
       }
       body {
-        background-color: #f3f4f6;
-        color: white;
-        font-family: 'Inter', sans-serif;
-        min-height: 100vh;
+        background-color: var(--paper);
+        color: var(--ink);
+        font-family: var(--font-albert-sans), 'Albert Sans', 'Manrope', sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
-      @keyframes fadeUp {
-        from {
-          opacity: 0;
-          transform: translateY(18px);
+      .site-title {
+        letter-spacing: -0.035em;
+        text-wrap: balance;
+        font-size: clamp(2.25rem, 6vw, 3.75rem);
+        font-weight: 700;
+        line-height: 1.08;
+      }
+      .section-title {
+        letter-spacing: -0.025em;
+        font-size: clamp(1.75rem, 3.6vw, 2.5rem);
+        font-weight: 700;
+        line-height: 1.15;
+      }
+      .btn {
+        white-space: nowrap;
+        cursor: pointer;
+        border-radius: 9999px;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        height: 2.75rem;
+        padding: 0 1.25rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        line-height: 1;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        display: inline-flex;
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn-primary {
+        background: var(--ink);
+        color: var(--paper);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.08);
+      }
+      .btn-primary:hover {
+        opacity: 0.92;
+        transform: translateY(-1px);
+      }
+      .btn-light {
+        background: var(--surface);
+        color: var(--ink);
+        box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,0.04);
+      }
+      .btn-light:hover {
+        background: var(--surface-soft);
+      }
+      .strip {
+        scrollbar-width: none;
+        padding-left: max(1rem, 50% - 176px);
+        padding-right: 2rem;
+        scroll-padding-left: max(1rem, 50% - 176px);
+      }
+      @media (min-width: 768px) {
+        .strip {
+          padding-left: max(1rem, 50% - 352px);
+          padding-right: 4rem;
+          scroll-padding-left: max(1rem, 50% - 352px);
         }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
       }
-      .reveal {
-        opacity: 0;
-        transform: translateY(18px);
-        animation: fadeUp 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      .strip::-webkit-scrollbar {
+        display: none;
       }
-      .reveal-delay-1 { animation-delay: 100ms; }
-      .reveal-delay-2 { animation-delay: 180ms; }
-      .reveal-delay-3 { animation-delay: 260ms; }
-      .smooth-card {
-        transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 320ms ease;
+      @keyframes rise {
+        0% { opacity: 0; transform: translateY(12px); }
+        100% { opacity: 1; transform: none; }
+      }
+      .rise {
+        animation: 0.6s cubic-bezier(0.22, 1, 0.36, 1) both rise;
       }
       @media (prefers-reduced-motion: reduce) {
         html {
           scroll-behavior: auto;
         }
-        .reveal,
-        .reveal-delay-1,
-        .reveal-delay-2,
-        .reveal-delay-3 {
-          opacity: 1;
-          transform: none;
+        .rise {
           animation: none;
-        }
-        .smooth-card {
-          transition: none;
         }
       }
       /* Custom scrollbar */
       ::-webkit-scrollbar {
-        width: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #1a1a1a; 
+        background: var(--paper);
       }
       ::-webkit-scrollbar-thumb {
-        background: #333; 
-        border-radius: 4px;
+        background: var(--line);
+        border-radius: 9999px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #444; 
+        background: var(--ink-muted);
       }
     </style>
-  <script type="importmap">
-{
-  
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
+  </head>
   <body>
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

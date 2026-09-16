@@ -1,2 +1,120 @@
-/* Intentionally minimal.
-   Global visual tokens live in index.html because Tailwind is loaded from CDN. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.text-resize-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.canvas-text:hover .text-resize-handle,
+.canvas-text:focus-within .text-resize-handle,
+.text-resize-handle.is-resizing {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.canvas-text.is-selected .text-resize-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.canvas-text {
+  min-height: 32px;
+  touch-action: none;
+}
+
+.canvas-text:hover,
+.canvas-text:focus-within,
+.canvas-text.is-active,
+.canvas-text.is-selected {
+  outline: 2px solid #8B5CF6;
+  outline-offset: 0;
+}
+
+.text-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border: 1px solid #A8ADB8;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
+  pointer-events: none;
+}
+
+.corner-handle::after {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.horizontal-handle::after {
+  width: 18px;
+  height: 7px;
+  border-radius: 4px;
+}
+
+.vertical-handle::after {
+  width: 7px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+@media (max-width: 767px) {
+  .app-header {
+    height: 64px;
+  }
+
+  .app-header button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .preview-frame {
+    --preview-height: min(56dvh, calc(100dvh - 240px));
+  }
+
+  .mobile-preview > div {
+    height: auto;
+  }
+
+  .mobile-bottom-bar > button {
+    min-height: 56px;
+    min-width: 0;
+    justify-content: center;
+    border-radius: 8px;
+  }
+
+  .mobile-editor {
+    max-height: calc(100dvh - 128px - env(safe-area-inset-bottom));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+
+  .mobile-editor input:not([type='range']),
+  .mobile-editor select,
+  .mobile-editor textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .mobile-editor button,
+  .mobile-preview button {
+    min-height: 44px;
+  }
+
+  .mobile-editor .mobile-banner-toggle {
+    min-height: 24px;
+  }
+
+  .mobile-editor input[type='range'] {
+    min-height: 32px;
+  }
+
+  .mobile-preview .text-resize-handle {
+    min-height: 28px;
+    width: 28px;
+    height: 28px;
+  }
+}

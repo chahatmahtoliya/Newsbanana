@@ -281,13 +281,13 @@ export async function exportAllPlatforms(
         }
 
         const blob = await exportForPlatform(config, platform);
-        const filename = `newsflash_${platform.id}_${platform.width}x${platform.height}.png`;
+        const filename = `ncreative_${platform.id}_${platform.width}x${platform.height}.png`;
         zip.file(filename, blob);
     }
 
     // Generate and download ZIP
     const zipBlob = await zip.generateAsync({ type: 'blob' });
-    saveAs(zipBlob, `newsflash_all_platforms_${Date.now()}.zip`);
+    saveAs(zipBlob, `ncreative_all_platforms_${Date.now()}.zip`);
 }
 
 /**
@@ -301,5 +301,5 @@ export async function quickExport(
     if (!platform) throw new Error('Platform not found');
 
     const blob = await exportForPlatform(config, platform);
-    saveAs(blob, `newsflash_${platform.id}_${platform.width}x${platform.height}.png`);
+    saveAs(blob, `ncreative_${platform.id}_${platform.width}x${platform.height}.png`);
 }

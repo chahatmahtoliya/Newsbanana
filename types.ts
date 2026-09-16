@@ -117,16 +117,32 @@ export const defaultMultiImageSettings: MultiImageSettings = {
   collageLayout: '2x2',
 };
 
+// ─── Canvas Overlay types ────────────────────────────────────────────────────
+
+export type OverlayType = 'icon' | 'shape' | 'pattern' | 'frame' | 'emoji' | 'sticker';
+
+export interface CanvasOverlay {
+  id: string;           // unique identifier
+  type: OverlayType;
+  content: string;      // SVG path, emoji string, or sticker content
+  color: string;        // hex or rgba
+  x: number;           // percentage 0–100
+  y: number;           // percentage 0–100
+  width: number;       // px, or 100 for full-canvas
+  height: number;      // px, or 100 for full-canvas
+  label: string;
+  isFullCanvas?: boolean; // true for patterns/frames
+  fontSize?: number;    // for emojis
+  stickerStyle?: string; // Tailwind class string for stickers
+  rotation?: number;   // degrees
+  scale?: number;      // 0.5–3
+}
+
 // Available fonts for selection
 export const availableFonts = [
-  'Oswald',
-  'Inter',
-  'Roboto',
-  'Montserrat',
-  'Poppins',
-  'Playfair Display',
-  'Bebas Neue',
-  'Anton',
-  'Lato',
-  'Open Sans',
+  'Instrument Sans', 'Manrope', 'Plus Jakarta Sans', 'DM Sans', 'Figtree', 'Outfit', 'Sora', 'Urbanist', 'Onest', 'Gabarito', 'Hanken Grotesk', 'Schibsted Grotesk', 'Wix Madefor Display', 'Red Hat Display', 'Space Grotesk', 'Inter', 'Montserrat', 'Poppins', 'Raleway', 'Rubik', 'Nunito', 'Source Sans 3', 'Open Sans', 'Lato', 'Roboto', 'Ubuntu',
+  'Bricolage Grotesque', 'Unbounded', 'Syne', 'Anybody', 'Big Shoulders Display', 'League Spartan', 'Archivo Black', 'Anton', 'Bebas Neue', 'Oswald', 'Staatliches', 'Teko', 'Bungee', 'Russo One', 'Titan One', 'Concert One', 'Bangers', 'Black Ops One', 'Secular One', 'Fredoka',
+  'Instrument Serif', 'Fraunces', 'Newsreader', 'DM Serif Display', 'Bodoni Moda', 'Noto Serif Display', 'Young Serif', 'Playfair Display', 'Libre Baskerville', 'Lora', 'Merriweather', 'Cormorant Garamond', 'Prata', 'Abril Fatface', 'Cinzel',
+  'JetBrains Mono', 'IBM Plex Mono', 'DM Mono', 'Space Mono', 'Roboto Mono', 'Chakra Petch', 'Orbitron', 'Press Start 2P',
+  'Caveat', 'Dancing Script', 'Pacifico', 'Permanent Marker', 'Great Vibes', 'Satisfy', 'Lobster'
 ];

@@ -1,10 +1,14 @@
 import React, { useState, useRef } from 'react';
-import { Newspaper, Download, Image as ImageIcon, Type, Palette, Grid, X, Moon, Sun, Save, Plus, Minus, Film, Layers, Move, Monitor, RotateCcw, Sparkles, Rocket, ShieldCheck, ChevronDown, CheckCircle2, Mail, Upload } from 'lucide-react';
+import { Newspaper, Download, Image as ImageIcon, Type, Palette, Grid, X, Moon, Sun, Save, Plus, Maximize2, Minimize2, Film, Layers, Move, Monitor, RotateCcw, Sparkles, Rocket, ShieldCheck, ChevronDown, CheckCircle2, Mail, Upload } from 'lucide-react';
 import { generateNewsCreative, generateNewsVideoCreative } from './services/geminiService';
 import { generateMultiImageVideo } from './services/slideshowService';
 import { generateNewsVideo } from './services/videoService';
-import { StyleSettings, defaultStyleSettings, MultiImageSettings, defaultMultiImageSettings, VideoMode, TransitionType, CollageLayout, socialMediaSizes, SocialMediaSizePreset, SocialMediaPlatform, LayoutSettings, defaultLayoutSettings, TextCase } from './types';
+import { StyleSettings, defaultStyleSettings, MultiImageSettings, defaultMultiImageSettings, VideoMode, TransitionType, CollageLayout, socialMediaSizes, SocialMediaSizePreset, SocialMediaPlatform, LayoutSettings, defaultLayoutSettings, TextCase, CanvasOverlay } from './types';
+
 import CreatorSidebar from './components/CreatorSidebar';
+import TemplatePicker from './components/TemplatePicker';
+import { Template } from './services/templateService';
+import { drawCodeTemplate } from './services/templateRenderer';
 
 const applyTextCase = (text: string, casing: TextCase): string => {
   if (!text) return text;
@@ -22,10 +26,52 @@ interface VisualTemplate {
   name: string;
   thumbnail: string;
   defaultBanner: string;
+  showBanner?: boolean;
+  layout?: LayoutSettings;
+  styles?: Partial<StyleSettings>;
+  headlineWidth?: number;
+  descriptionWidth?: number;
 }
 
 const VISUAL_TEMPLATES: VisualTemplate[] = [
-  { id: 'breaking-news', name: 'Breaking News', thumbnail: '/templates/template_breaking_news_1769538066288.png', defaultBanner: 'BREAKING NEWS' },
+  {
+    id: 'default',
+    name: 'Default',
+    thumbnail: '/templates/template_default.png',
+    defaultBanner: '',
+    showBanner: false,
+    layout: { banner: { x: 5, y: 5 }, headline: { x: 5, y: 70 }, description: { x: 5, y: 85 } },
+    styles: {
+      headlineFont: 'Space Grotesk',
+      descriptionFont: 'Manrope',
+      headlineFontSize: 70,
+      descriptionFontSize: 18,
+      headlineColor: '#FFFFFF',
+      descriptionColor: '#E5E5E5',
+      bannerColor: '#DC2626',
+      headlineCasing: 'uppercase',
+      descriptionCasing: 'sentence'
+    }
+  },
+  {
+    id: 'breaking-news',
+    name: 'Breaking News',
+    thumbnail: '/templates/template_breaking_news_1769538066288.png',
+    defaultBanner: 'BREAKING NEWS',
+    showBanner: true,
+    layout: { banner: { x: 5, y: 5 }, headline: { x: 5, y: 70 }, description: { x: 5, y: 85 } },
+    styles: {
+      headlineFont: 'Space Grotesk',
+      descriptionFont: 'Manrope',
+      headlineFontSize: 70,
+      descriptionFontSize: 18,
+      headlineColor: '#FFFFFF',
+      descriptionColor: '#E5E5E5',
+      bannerColor: '#DC2626',
+      headlineCasing: 'uppercase',
+      descriptionCasing: 'sentence'
+    }
+  },
   { id: 'quote-card', name: 'Quote Card', thumbnail: '/templates/template_quote_card_1769538092996.png', defaultBanner: '' },
   { id: 'sports-score', name: 'Sports Score', thumbnail: '/templates/template_sports_score_1769538110413.png', defaultBanner: 'FINAL SCORE' },
   { id: 'announcement', name: 'Announcement', thumbnail: '/templates/template_announcement_1769538128393.png', defaultBanner: 'ANNOUNCEMENT' },
@@ -46,6 +92,7 @@ const VISUAL_TEMPLATES: VisualTemplate[] = [
 
 // Expanded font collection - organized by style
 const FONTS = [
+  'Manrope', 'DM Sans',
   // Bold Display Fonts (great for headlines)
   'Oswald', 'Anton', 'Bebas Neue', 'Staatliches', 'Russo One', 'Teko', 'Secular One', 'Titan One', 'Black Ops One', 'Bungee', 'Concert One', 'Bangers',
   // Modern Sans-Serif
@@ -122,9 +169,20 @@ const FAQ_ITEMS = [
 ];
 
 type ResizableTextElement = 'headline' | 'description';
+const TEXT_RESIZE_HANDLES = [
+  { name: 'top left', x: -1, y: -1, left: '0%', top: '0%', cursor: 'nwse-resize' },
+  { name: 'top', x: 0, y: -1, left: '50%', top: '0%', cursor: 'ns-resize' },
+  { name: 'top right', x: 1, y: -1, left: '100%', top: '0%', cursor: 'nesw-resize' },
+  { name: 'right', x: 1, y: 0, left: '100%', top: '50%', cursor: 'ew-resize' },
+  { name: 'bottom right', x: 1, y: 1, left: '100%', top: '100%', cursor: 'nwse-resize' },
+  { name: 'bottom', x: 0, y: 1, left: '50%', top: '100%', cursor: 'ns-resize' },
+  { name: 'bottom left', x: -1, y: 1, left: '0%', top: '100%', cursor: 'nesw-resize' },
+  { name: 'left', x: -1, y: 0, left: '0%', top: '50%', cursor: 'ew-resize' },
+] as const;
+type TextResizeHandle = typeof TEXT_RESIZE_HANDLES[number];
 
 const TEXT_SIZE_LIMITS: Record<ResizableTextElement, { min: number; max: number }> = {
-  headline: { min: 24, max: 120 },
+  headline: { min: 24, max: 300 },
   description: { min: 12, max: 48 }
 };
 
@@ -146,8 +204,8 @@ const App: React.FC = () => {
   // Content
   const [headline, setHeadline] = useState('');
   const [description, setDescription] = useState('');
-  const [bannerText, setBannerText] = useState('BREAKING NEWS');
-  const [showBanner, setShowBanner] = useState(true);
+  const [bannerText, setBannerText] = useState(VISUAL_TEMPLATES[0].defaultBanner);
+  const [showBanner, setShowBanner] = useState(Boolean(VISUAL_TEMPLATES[0].showBanner ?? VISUAL_TEMPLATES[0].defaultBanner));
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedMediaType, setUploadedMediaType] = useState<'image' | 'video'>('image');
   const [uploadedLogo, setUploadedLogo] = useState<string | null>(null);
@@ -162,8 +220,8 @@ const App: React.FC = () => {
   // Style
   const [styleSettings, setStyleSettings] = useState<StyleSettings>({
     ...defaultStyleSettings,
-    headlineFont: 'Oswald',
-    descriptionFont: 'Inter',
+    headlineFont: 'Space Grotesk',
+    descriptionFont: 'Manrope',
     headlineFontSize: 70,
     descriptionFontSize: 18,
     headlineColor: '#FFFFFF',
@@ -184,9 +242,12 @@ const App: React.FC = () => {
   const [selectedSocialMediaSize, setSelectedSocialMediaSize] = useState<SocialMediaSizePreset>(socialMediaSizes[0]);
 
   // Layout
-  const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>(defaultLayoutSettings);
+  const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>(VISUAL_TEMPLATES[0].layout || defaultLayoutSettings);
   const [draggingElement, setDraggingElement] = useState<'banner' | 'headline' | 'description' | null>(null);
   const [resizingTextElement, setResizingTextElement] = useState<ResizableTextElement | null>(null);
+  const [selectedCanvasText, setSelectedCanvasText] = useState<ResizableTextElement | null>(null);
+  const textDragOffsetRef = useRef({ x: 0, y: 0 });
+  const sampleContentRef = useRef({ headline: '', description: '' });
   const [previewScale, setPreviewScale] = useState(1);
   const previewRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
@@ -195,9 +256,61 @@ const App: React.FC = () => {
     element: null as ResizableTextElement | null,
     startX: 0,
     startY: 0,
-    startFontSize: 0
+    startFontSize: 0,
+    directionX: 1,
+    directionY: 1
   });
   const mobileUploadInputRef = useRef<HTMLInputElement>(null);
+  const templateSelectionRef = useRef(0);
+
+  // Canvas overlays (icons, shapes, patterns, frames, emojis, stickers)
+  const [canvasOverlays, setCanvasOverlays] = useState<CanvasOverlay[]>([]);
+  const [draggingOverlayId, setDraggingOverlayId] = useState<string | null>(null);
+  const overlayDragOffsetRef = useRef({ x: 0, y: 0 });
+
+  const handleAddOverlay = (overlayDef: Omit<CanvasOverlay, 'id' | 'x' | 'y'>) => {
+    const newOverlay: CanvasOverlay = {
+      ...overlayDef,
+      id: `overlay-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      x: 40,
+      y: 40,
+    };
+    setCanvasOverlays(prev => [...prev, newOverlay]);
+  };
+
+  const handleRemoveOverlay = (id: string) => {
+    setCanvasOverlays(prev => prev.filter(o => o.id !== id));
+  };
+
+  const updateOverlayPosition = (id: string, clientX: number, clientY: number) => {
+    if (!previewRef.current) return;
+    const rect = previewRef.current.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 100 - overlayDragOffsetRef.current.x;
+    const y = ((clientY - rect.top) / rect.height) * 100 - overlayDragOffsetRef.current.y;
+    setCanvasOverlays(prev => prev.map(o =>
+      o.id === id ? { ...o, x: Math.max(0, Math.min(95, x)), y: Math.max(0, Math.min(95, y)) } : o
+    ));
+  };
+
+
+  React.useEffect(() => {
+    if (!showTemplateSidebar && !showMobilePanel) return;
+    const previousOverflow = document.body.style.overflow;
+    const updateScrollLock = () => {
+      document.body.style.overflow = showTemplateSidebar || window.innerWidth < 768 ? 'hidden' : previousOverflow;
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setShowTemplateSidebar(false); setShowMobilePanel(false); }
+    };
+    updateScrollLock();
+    window.addEventListener('resize', updateScrollLock);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('resize', updateScrollLock);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [showTemplateSidebar, showMobilePanel]);
 
   const isMultiImageMode = multiImageSettings.videoMode !== 'single';
   const previewMedia = uploadedImage || selectedTemplate?.thumbnail || null;
@@ -245,7 +358,7 @@ const App: React.FC = () => {
       observer.disconnect();
       window.removeEventListener('resize', updatePreviewScale);
     };
-  }, [selectedSocialMediaSize.id, generatedOutput]);
+  }, [selectedSocialMediaSize.width, selectedSocialMediaSize.height, zoom, generatedOutput]);
 
   React.useEffect(() => {
     if (!generatedOutput) return;
@@ -272,8 +385,8 @@ const App: React.FC = () => {
   const updateDraggedElementPosition = (element: 'banner' | 'headline' | 'description', clientX: number, clientY: number) => {
     if (!previewRef.current) return;
     const rect = previewRef.current.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * 100;
-    const y = ((clientY - rect.top) / rect.height) * 100;
+    const x = ((clientX - rect.left) / rect.width) * 100 - textDragOffsetRef.current.x;
+    const y = ((clientY - rect.top) / rect.height) * 100 - textDragOffsetRef.current.y;
 
     setLayoutSettings(prev => ({
       ...prev,
@@ -303,26 +416,35 @@ const App: React.FC = () => {
   };
 
   // Handlers
+  const startTextDrag = (element: 'banner' | 'headline' | 'description', clientX: number, clientY: number) => {
+    if (!previewRef.current) return;
+    const rect = previewRef.current.getBoundingClientRect();
+    textDragOffsetRef.current = {
+      x: ((clientX - rect.left) / rect.width) * 100 - layoutSettings[element].x,
+      y: ((clientY - rect.top) / rect.height) * 100 - layoutSettings[element].y
+    };
+    setSelectedCanvasText(element === 'banner' ? null : element);
+    setDraggingElement(element);
+  };
   const handleMouseDown = (e: React.MouseEvent, element: 'banner' | 'headline' | 'description') => {
     e.stopPropagation();
     e.preventDefault();
-    setDraggingElement(element);
+    startTextDrag(element, e.clientX, e.clientY);
   };
 
   const handleTouchStart = (e: React.TouchEvent, element: 'banner' | 'headline' | 'description') => {
     if (!e.touches.length) return;
     e.stopPropagation();
-    e.preventDefault();
     const touch = e.touches[0];
-    setDraggingElement(element);
-    updateDraggedElementPosition(element, touch.clientX, touch.clientY);
+    startTextDrag(element, touch.clientX, touch.clientY);
   };
 
   const updateTextSizeFromCanvasResize = (clientX: number, clientY: number) => {
     const resizeState = textResizeStartRef.current;
     if (!resizeState.element) return;
 
-    const delta = (clientX - resizeState.startX) + (clientY - resizeState.startY);
+    const delta = (clientX - resizeState.startX) * resizeState.directionX
+      + (clientY - resizeState.startY) * resizeState.directionY;
     const speed = resizeState.element === 'headline' ? 0.35 : 0.2;
     const limits = TEXT_SIZE_LIMITS[resizeState.element];
     const nextSize = Math.round(Math.max(limits.min, Math.min(limits.max, resizeState.startFontSize + (delta * speed))));
@@ -334,30 +456,44 @@ const App: React.FC = () => {
     }
   };
 
-  const startTextResize = (element: ResizableTextElement, clientX: number, clientY: number) => {
+  const startTextResize = (element: ResizableTextElement, clientX: number, clientY: number, handle: TextResizeHandle) => {
     setDraggingElement(null);
     textResizeStartRef.current = {
       element,
       startX: clientX,
       startY: clientY,
-      startFontSize: element === 'headline' ? styleSettings.headlineFontSize : styleSettings.descriptionFontSize
+      startFontSize: element === 'headline' ? styleSettings.headlineFontSize : styleSettings.descriptionFontSize,
+      directionX: handle.x,
+      directionY: handle.y
     };
     setResizingTextElement(element);
   };
 
-  const handleTextResizeMouseDown = (e: React.MouseEvent, element: ResizableTextElement) => {
+  const handleTextResizeMouseDown = (e: React.MouseEvent, element: ResizableTextElement, handle: TextResizeHandle) => {
     e.stopPropagation();
     e.preventDefault();
-    startTextResize(element, e.clientX, e.clientY);
+    startTextResize(element, e.clientX, e.clientY, handle);
   };
 
-  const handleTextResizeTouchStart = (e: React.TouchEvent, element: ResizableTextElement) => {
+  const handleTextResizeTouchStart = (e: React.TouchEvent, element: ResizableTextElement, handle: TextResizeHandle) => {
     if (!e.touches.length) return;
     e.stopPropagation();
-    e.preventDefault();
     const touch = e.touches[0];
-    startTextResize(element, touch.clientX, touch.clientY);
+    startTextResize(element, touch.clientX, touch.clientY, handle);
   };
+
+  const renderTextResizeHandles = (element: ResizableTextElement) => TEXT_RESIZE_HANDLES.map(handle => (
+    <button
+      key={handle.name}
+      type="button"
+      onMouseDown={event => handleTextResizeMouseDown(event, element, handle)}
+      onTouchStart={event => handleTextResizeTouchStart(event, element, handle)}
+      className={`text-resize-handle ${handle.x !== 0 && handle.y !== 0 ? 'corner-handle' : handle.x === 0 ? 'horizontal-handle' : 'vertical-handle'} absolute z-30 w-5 h-5 bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current ${resizingTextElement === element ? 'is-resizing' : ''}`}
+      style={{ left: handle.left, top: handle.top, transform: 'translate(-50%, -50%)', cursor: handle.cursor, touchAction: 'none' }}
+      title={`Resize ${element} from ${handle.name}`}
+      aria-label={`Resize ${element} from ${handle.name}`}
+    />
+  ));
 
   const handleLogoMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -374,7 +510,6 @@ const App: React.FC = () => {
   const handleLogoTouchStart = (e: React.TouchEvent) => {
     if (!e.touches.length) return;
     e.stopPropagation();
-    e.preventDefault();
     if (!previewRef.current || !logoRef.current) return;
     const touch = e.touches[0];
     const logoRect = logoRef.current.getBoundingClientRect();
@@ -545,10 +680,57 @@ const App: React.FC = () => {
   };
 
   const handleSelectTemplate = (template: VisualTemplate) => {
+    templateSelectionRef.current += 1;
     setSelectedTemplate(template);
     setBannerText(template.defaultBanner);
-    setShowBanner(!!template.defaultBanner);
+    setShowBanner(template.showBanner !== undefined ? template.showBanner : Boolean(template.defaultBanner));
+    if (template.layout) {
+      setLayoutSettings({ ...template.layout });
+    } else {
+      setLayoutSettings(defaultLayoutSettings);
+    }
+    if (template.styles) {
+      setStyleSettings(prev => ({ ...prev, ...template.styles }));
+    }
     setShowTemplateSidebar(false);
+    setSelectedCanvasText(null);
+  };
+
+  const handleSidebarTemplateSelect = async (template: Template) => {
+    const selection = ++templateSelectionRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = selectedSocialMediaSize.width;
+    canvas.height = selectedSocialMediaSize.height;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    let hasMedia = false;
+    if (template.defaultMedia) {
+      const image = new Image();
+      image.src = template.defaultMedia;
+      try {
+        await image.decode();
+        const scale = Math.max(canvas.width / image.width, canvas.height / image.height);
+        const width = image.width * scale;
+        const height = image.height * scale;
+        context.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+        hasMedia = true;
+      } catch {
+        // Keep the template usable when its sample photo cannot load.
+      }
+    }
+    if (selection !== templateSelectionRef.current) return;
+    drawCodeTemplate(context, template, template.theme, canvas.width, canvas.height, hasMedia);
+    handleSelectTemplate({ ...template, thumbnail: canvas.toDataURL('image/png') });
+    const fontScale = Math.min(canvas.width / 1000, canvas.height / 1500);
+    setStyleSettings({ ...defaultStyleSettings, ...template.styles,
+      headlineFontSize: Math.round((template.styles.headlineFontSize || defaultStyleSettings.headlineFontSize) * fontScale),
+      descriptionFontSize: Math.round((template.styles.descriptionFontSize || defaultStyleSettings.descriptionFontSize) * fontScale)
+    });
+    const previousSample = sampleContentRef.current;
+    setHeadline(current => !current || current === previousSample.headline ? template.defaultHeadline : current);
+    setDescription(current => !current || current === previousSample.description ? template.defaultDescription : current);
+    sampleContentRef.current = { headline: template.defaultHeadline, description: template.defaultDescription };
   };
 
   const handleGenerate = async () => {
@@ -607,7 +789,7 @@ const App: React.FC = () => {
       const extension = generatedOutput.extension || (generatedOutput.type === 'video' ? 'mp4' : 'png');
       const link = document.createElement('a');
       link.href = generatedOutput.url;
-      link.download = `newsbanana-${Date.now()}.${extension}`;
+      link.download = `ncreative-${Date.now()}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -654,8 +836,7 @@ const App: React.FC = () => {
   const styleSettingsPanel = (
     <div className="space-y-4">
       <div>
-        <p className={`text-[11px] font-mono uppercase tracking-[0.28em] ${shellMuted}`}>Visual System</p>
-        <h3 className={`mt-2 flex items-center text-sm font-semibold ${shellHeading}`}>
+        <h3 className={`flex items-center text-sm font-semibold ${shellHeading}`}>
           <Palette className="w-4 h-4 mr-2 text-[#7EF7D4]" />
         Style Settings
         </h3>
@@ -782,13 +963,14 @@ const App: React.FC = () => {
           darkMode={darkMode}
           onCategorySelect={setSelectedSidebarCategory}
           selectedCategory={selectedSidebarCategory}
+          onTemplateSelect={handleSidebarTemplateSelect}
         />
       </div>
 
       {/* ============ MAIN CONTENT ============ */}
-      <div className="flex-1 flex flex-col min-h-screen pb-20 md:pb-0">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen pb-20 md:pb-0">
         {/* ============ HEADER ============ */}
-        <header className={`${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'} border-b px-4 py-3 sticky top-0 z-40`}>
+        <header className={`app-header ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'} border-b px-4 py-3 sticky top-0 z-40`}>
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
             {/* Logo */}
             <div className="flex items-center space-x-3 min-w-0">
@@ -797,8 +979,7 @@ const App: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>news</span>
-                  <span className="text-red-500 font-bold">banana</span>
+                  <span className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Ncreative</span>
                 </div>
                 <p className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Create Professional News Graphics</p>
               </div>
@@ -826,6 +1007,8 @@ const App: React.FC = () => {
             {/* Mobile menu toggle */}
             <button
               onClick={() => setShowMobilePanel(!showMobilePanel)}
+              aria-label={showMobilePanel ? 'Close editor' : 'Open editor'}
+              aria-expanded={showMobilePanel}
               className={`md:hidden p-2 rounded-lg ${showMobilePanel ? 'bg-red-500 text-white' : darkMode ? 'bg-gray-900 text-gray-300' : 'bg-gray-100 text-gray-600'}`}
             >
               <Type className="w-5 h-5" />
@@ -875,24 +1058,28 @@ const App: React.FC = () => {
               type="button"
               aria-label="Close editor panel"
               onClick={() => setShowMobilePanel(false)}
-              className="md:hidden fixed inset-0 top-[57px] z-40 bg-black/45"
+              className="md:hidden fixed inset-0 top-16 z-40 bg-black/45"
             />
           )}
 
           {/* ============ LEFT PANEL ============ */}
           <aside className={`
-          fixed md:static inset-x-0 top-[57px] bottom-0 md:inset-auto
+          mobile-editor fixed md:static inset-x-0 top-16 bottom-[calc(64px+env(safe-area-inset-bottom))] md:inset-auto
           ${showMobilePanel ? 'translate-y-0' : 'translate-y-full pointer-events-none'} md:translate-y-0 md:pointer-events-auto
           z-50 md:z-auto
           w-full md:w-80 lg:w-96
           max-h-[calc(100dvh-57px)] md:max-h-none
-          ${darkMode ? 'bg-black' : 'bg-white'}
+          ${darkMode ? 'bg-black text-white' : 'bg-white text-gray-900'}
           md:min-h-[calc(100vh-57px)] overflow-y-auto md:overflow-visible overscroll-y-contain md:overscroll-auto
           p-4 md:p-6 pb-24 md:pb-6
           border-t md:border-t-0 border-b md:border-b-0 md:border-r
           ${darkMode ? 'border-gray-800' : 'border-gray-200'}
           transition-transform duration-300 ease-out
         `}>
+            <div className={`md:hidden sticky -top-4 z-10 flex items-center justify-between gap-3 -mx-4 -mt-4 mb-4 px-4 py-2 border-b ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}`}>
+              <h2 className="font-semibold">Edit creative</h2>
+              <button type="button" onClick={() => setShowMobilePanel(false)} className="min-h-11 px-4 rounded-lg text-red-500 font-semibold">Done</button>
+            </div>
             {/* Canvas Size Selection */}
             <div className="mb-6">
               <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
@@ -916,59 +1103,61 @@ const App: React.FC = () => {
             </div>
 
             {/* Video Mode Selection */}
-            <div className="mb-6">
-              <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                <Film className="w-4 h-4 mr-2 text-red-500" />
+            <div className="mb-3">
+              <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-1.5 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                <Film className="w-3.5 h-3.5 mr-1.5 text-red-500" />
                 Video Mode
               </h3>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-4 gap-1">
                 {videoModes.map(mode => (
                   <button
                     key={mode.value}
                     onClick={() => setMultiImageSettings(prev => ({ ...prev, videoMode: mode.value }))}
-                    className={`p-2 rounded-lg border text-left transition-all ${multiImageSettings.videoMode === mode.value
+                    title={mode.desc}
+                    className={`py-1.5 px-1 rounded-md border text-center transition-all ${multiImageSettings.videoMode === mode.value
                       ? 'border-red-500 bg-red-50 text-red-700'
                       : darkMode
                         ? 'border-gray-800 bg-gray-900 text-gray-300 hover:border-gray-700'
                         : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
                       }`}
                   >
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-col items-center gap-0.5">
                       {mode.icon}
-                      <span className="text-xs font-medium">{mode.label}</span>
+                      <span className="text-[10px] font-medium leading-none">{mode.label}</span>
                     </div>
-                    <span className="text-xs opacity-60">{mode.desc}</span>
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Background Image */}
-            <div className="mb-6">
-              <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                <ImageIcon className="w-4 h-4 mr-2 text-red-500" />
+            <div className="mb-3">
+              <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-1.5 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                <ImageIcon className="w-3.5 h-3.5 mr-1.5 text-red-500" />
                 Background Media
               </h3>
 
               {isMultiImageMode ? (
                 // Multi-image upload
                 <div>
-                  <div className="flex flex-wrap gap-2 mb-2">
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
                     {multipleImages.map((img, i) => (
-                      <div key={i} className="relative w-16 h-16">
+                      <div key={i} className="relative w-12 h-12">
                         <img src={img} alt="" className="w-full h-full object-cover rounded" />
                         <button
                           onClick={() => setMultipleImages(prev => prev.filter((_, idx) => idx !== i))}
                           className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-2.5 h-2.5" />
                         </button>
                       </div>
                     ))}
                   </div>
-                  <label className={`block border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${darkMode ? 'border-gray-800 hover:border-gray-700' : 'border-gray-300 hover:border-gray-400'}`}>
-                    <ImageIcon className={`w-6 h-6 mx-auto mb-1 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
-                    <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Add images</span>
+                  <label className={`block border border-dashed rounded-lg p-2 text-center cursor-pointer transition-colors ${darkMode ? 'border-gray-800 hover:border-gray-700' : 'border-gray-300 hover:border-gray-400'}`}>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <ImageIcon className={`w-4 h-4 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                      <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Add images</span>
+                    </div>
                     <input type="file" accept="image/*" multiple onChange={handleMultiImageUpload} className="hidden" />
                   </label>
                 </div>
@@ -977,27 +1166,26 @@ const App: React.FC = () => {
                 uploadedImage ? (
                   <div className="relative">
                     {uploadedMediaType === 'video' ? (
-                      <video src={uploadedImage} className="w-full h-24 object-cover rounded-lg" controls muted playsInline />
+                      <video src={uploadedImage} className="w-full h-16 object-cover rounded-lg" controls muted playsInline />
                     ) : (
-                      <img src={uploadedImage} alt="Background" className="w-full h-24 object-cover rounded-lg" />
+                      <img src={uploadedImage} alt="Background" className="w-full h-16 object-cover rounded-lg" />
                     )}
                     <button
                       onClick={() => {
                         setUploadedImage(null);
                         setUploadedMediaType('image');
                       }}
-                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-2.5 h-2.5" />
                     </button>
-                    <p className={`text-xs text-center mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Click to replace</p>
                   </div>
                 ) : (
-                  <label className={`block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${darkMode ? 'border-gray-800 hover:border-gray-700' : 'border-gray-300 hover:border-gray-400'}`}>
-                    <div className={`w-12 h-12 mx-auto mb-2 rounded-lg flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
-                      <ImageIcon className={`w-6 h-6 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
+                  <label className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${darkMode ? 'border-gray-800 hover:border-gray-700' : 'border-gray-300 hover:border-gray-400'}`}>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <ImageIcon className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
+                      <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Upload image or video</span>
                     </div>
-                    <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Click to replace</span>
                     <input type="file" accept="image/*,video/*" onChange={handleImageUpload} className="hidden" />
                   </label>
                 )
@@ -1005,47 +1193,45 @@ const App: React.FC = () => {
             </div>
 
             {/* Logo */}
-            <div className="mb-6">
-              <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                <ImageIcon className="w-4 h-4 mr-2 text-red-500" />
+            <div className="mb-3">
+              <h3 className={`flex items-center text-xs font-bold uppercase tracking-wider mb-1.5 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                <ImageIcon className="w-3.5 h-3.5 mr-1.5 text-red-500" />
                 Logo
               </h3>
 
-              {uploadedLogo ? (
-                <div className="relative mb-3">
-                  <img src={uploadedLogo} alt="Logo" className="w-auto h-16 object-contain rounded-lg bg-black/10 p-1" />
-                  <button
-                    onClick={() => setUploadedLogo(null)}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
-                    title="Remove logo"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <label className={`block border-2 border-dashed rounded-lg p-2.5 text-center cursor-pointer transition-colors mb-3 ${darkMode ? 'border-gray-800 hover:border-gray-700' : 'border-gray-300 hover:border-gray-400'}`}>
-                  <div className={`w-8 h-8 mx-auto mb-1 rounded-lg flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
-                    <ImageIcon className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              <div className="flex items-center gap-2 mb-1.5">
+                {uploadedLogo ? (
+                  <div className="relative shrink-0">
+                    <img src={uploadedLogo} alt="Logo" className="h-10 w-auto object-contain rounded bg-black/10 p-0.5" />
+                    <button
+                      onClick={() => setUploadedLogo(null)}
+                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
+                      title="Remove logo"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
                   </div>
-                  <span className={`text-[11px] leading-none ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Upload logo</span>
-                  <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                </label>
-              )}
-
-              <div>
-                <div className="flex justify-between mb-1">
-                  <label className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Logo Size</label>
-                  <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{logoSize}px</span>
+                ) : (
+                  <label className={`shrink-0 flex items-center gap-1.5 border border-dashed rounded-lg px-3 py-1.5 cursor-pointer transition-colors ${darkMode ? 'border-gray-800 hover:border-gray-700 text-gray-400' : 'border-gray-300 hover:border-gray-400 text-gray-500'}`}>
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span className="text-xs">Upload logo</span>
+                    <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                  </label>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between mb-0.5">
+                    <span className={`text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Size</span>
+                    <span className={`text-[10px] ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>{logoSize}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={40}
+                    max={220}
+                    value={logoSize}
+                    onChange={(e) => setLogoSize(parseInt(e.target.value))}
+                    className="w-full accent-red-500 cursor-pointer"
+                  />
                 </div>
-                <input
-                  type="range"
-                  min={40}
-                  max={220}
-                  value={logoSize}
-                  onChange={(e) => setLogoSize(parseInt(e.target.value))}
-                  className="w-full accent-red-500 cursor-pointer"
-                />
-                <p className={`text-xs mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Drag logo to move. Drag text corner handles on canvas to resize in real time.</p>
               </div>
             </div>
 
@@ -1058,16 +1244,21 @@ const App: React.FC = () => {
 
               {/* Banner Toggle */}
               <div className="flex items-center justify-between mb-2">
-                <label className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Banner Text</label>
+                <label htmlFor="banner-text" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Banner Text</label>
                 <button
+                  type="button"
                   onClick={() => setShowBanner(!showBanner)}
-                  className={`w-12 h-6 rounded-full p-1 transition-colors ${showBanner ? 'bg-red-500' : darkMode ? 'bg-gray-700' : 'bg-gray-300'}`}
+                  role="switch"
+                  aria-checked={showBanner}
+                  aria-label="Show banner text"
+                  className={`mobile-banner-toggle w-12 h-6 rounded-full p-1 transition-colors ${showBanner ? 'bg-red-500' : darkMode ? 'bg-gray-700' : 'bg-gray-300'}`}
                 >
                   <div className={`w-4 h-4 rounded-full bg-white transition-transform ${showBanner ? 'translate-x-6' : ''}`} />
                 </button>
               </div>
               {showBanner && (
                 <input
+                  id="banner-text"
                   type="text"
                   value={bannerText}
                   onChange={(e) => setBannerText(e.target.value.toUpperCase())}
@@ -1078,15 +1269,16 @@ const App: React.FC = () => {
               {/* Headline */}
               <div className="mb-3">
                 <div className="flex justify-between mb-1">
-                  <label className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Headline <span className="text-red-500">*</span></label>
+                  <label htmlFor="creative-headline" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Headline <span className="text-red-500">*</span></label>
                   <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>{headline.length}/50</span>
                 </div>
-                <input
-                  type="text"
+                <textarea
+                  id="creative-headline"
+                  rows={2}
                   value={headline}
                   onChange={(e) => setHeadline(e.target.value)}
                   // maxLength={50} // Limit removed
-                  placeholder="Enter headline..."
+                  placeholder="Enter headline... Add a space to leave it blank."
                   className={`w-full px-3 py-2 rounded-lg border text-sm ${darkMode ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:border-red-500`}
                 />
               </div>
@@ -1094,15 +1286,16 @@ const App: React.FC = () => {
               {/* Description */}
               <div>
                 <div className="flex justify-between mb-1">
-                  <label className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Description</label>
+                  <label htmlFor="creative-description" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Description</label>
                   <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>{description.length}/300</span>
                 </div>
                 <textarea
+                  id="creative-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={300}
-                  rows={4}
-                  placeholder="Enter description..."
+                  rows={2}
+                  placeholder="Enter description... Add a space to leave it blank."
                   className={`w-full px-3 py-2 rounded-lg border text-sm resize-none ${darkMode ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:border-red-500`}
                 />
               </div>
@@ -1114,34 +1307,38 @@ const App: React.FC = () => {
           </aside>
 
           {/* ============ RIGHT PANEL - PREVIEW ============ */}
-          <main className={`flex-1 p-3 sm:p-4 md:p-8 pb-24 md:pb-8 ${darkMode ? 'bg-black' : 'bg-gray-100'} min-h-[calc(100vh-57px)] flex flex-col`}>
+          <main className={`mobile-preview flex-1 min-w-0 p-3 sm:p-4 md:p-5 pb-6 md:pb-6 ${darkMode ? 'bg-black' : 'bg-gray-100'} md:min-h-[calc(100vh-57px)] flex flex-col`}>
             <div className="flex flex-col lg:flex-row gap-6 h-full">
-              <div className="flex-1 flex flex-col">
+              <div className="flex-1 min-w-0 flex flex-col items-center">
                 {/* Preview Canvas */}
-                <div className="flex-1 flex items-start justify-center pt-2 md:pt-4 mb-4 px-1 sm:px-2">
+                <div className="w-full md:flex-1 flex items-start justify-center pt-1 md:pt-2 mb-3 px-1 sm:px-2">
                   <div
-                    className="bg-black rounded-xl overflow-hidden shadow-2xl transition-transform"
-                    style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
+                    className="preview-frame bg-black rounded-2xl overflow-hidden shadow-2xl transition-all flex items-center justify-center shrink-0"
+                    style={{
+                      width: `${Math.round(460 * (zoom / 100))}px`,
+                      maxWidth: `min(100%, ${Math.round(460 * (zoom / 100))}px, calc(var(--preview-height, 72vh) * ${zoom / 100} * ${selectedSocialMediaSize.width / selectedSocialMediaSize.height}))`
+                    }}
                   >
                     {generatedOutput ? (
                       generatedOutput.type === 'video' ? (
-                        <video src={generatedOutput.url} controls autoPlay loop className="max-w-full max-h-[70vh]" />
+                        <video src={generatedOutput.url} controls autoPlay loop className="max-w-full max-h-[55vh] rounded-xl" />
                       ) : (
-                        <img src={generatedOutput.url} alt="Generated" className="max-w-full max-h-[70vh]" />
+                        <img src={generatedOutput.url} alt="Generated" className="max-w-full max-h-[55vh] rounded-xl" />
                       )
                     ) : (
                       <div
                         ref={previewRef}
-                        className="w-full max-w-[500px] relative transition-all duration-300 cursor-crosshair group"
+                        className="w-full relative transition-all duration-300 cursor-crosshair group"
                         style={{ aspectRatio: selectedSocialMediaSize.aspectRatio.replace(':', '/') }}
-
+                        onMouseDown={() => setSelectedCanvasText(null)}
+                        onTouchStart={() => setSelectedCanvasText(null)}
                       >
                         {/* Background */}
                         {previewMedia ? (
                           previewMediaType === 'video' ? (
                             <video src={previewMedia} className="w-full h-full object-cover select-none pointer-events-none" autoPlay muted loop playsInline />
                           ) : (
-                            <img src={previewMedia} alt="" className="w-full h-full object-cover select-none pointer-events-none" />
+                            <img key={previewMedia} src={previewMedia} alt="" className="w-full h-full object-cover select-none pointer-events-none" onError={event => { event.currentTarget.style.visibility = 'hidden'; }} />
                           )
                         ) : (
                           <div className="w-full h-full bg-gradient-to-b from-gray-700 to-gray-900 select-none pointer-events-none" />
@@ -1159,20 +1356,21 @@ const App: React.FC = () => {
                             className={`absolute z-30 select-none cursor-move transition-shadow ${isDraggingLogo ? 'ring-2 ring-red-500 shadow-xl' : 'hover:ring-1 hover:ring-white/60'}`}
                             style={{
                               left: `${logoPosition.x}%`,
-                              top: `${logoPosition.y}%`
+                              top: `${logoPosition.y}%`,
+                              touchAction: 'none'
                             }}
                           >
                             <img
                               src={uploadedLogo}
                               alt="Logo overlay"
                               className="h-auto object-contain drop-shadow-lg pointer-events-none"
-                              style={{ width: `${logoSize}px` }}
+                              style={{ width: `${Math.max(20, Math.round(logoSize * ((previewRef.current?.offsetWidth || 380) / 500)))}px` }}
                             />
                           </div>
                         )}
 
                         {/* Icon button (top right) */}
-                        <button className={`absolute top-4 right-4 w-8 h-8 bg-gray-800/80 rounded-lg flex items-center justify-center z-20 ${uploadedLogo ? 'opacity-0 pointer-events-none' : ''}`}>
+                        <button type="button" aria-label="Upload background media" onClick={handleMobileUploadClick} className={`absolute top-3 right-3 w-11 h-11 bg-gray-800/80 rounded-lg flex items-center justify-center z-20 ${uploadedLogo ? 'opacity-0 pointer-events-none' : ''}`}>
                           <ImageIcon className="w-4 h-4 text-gray-400" />
                         </button>
 
@@ -1182,12 +1380,13 @@ const App: React.FC = () => {
                             <div
                               onMouseDown={(e) => handleMouseDown(e, 'banner')}
                               onTouchStart={(e) => handleTouchStart(e, 'banner')}
-                              className={`absolute px-3 py-1 text-xs font-bold mb-3 uppercase tracking-wide cursor-move select-none transition-shadow ${draggingElement === 'banner' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
+                              className={`absolute px-3 py-1 text-xs font-bold mb-3 uppercase tracking-wide cursor-move select-none transition-shadow ${draggingElement === 'banner' ? 'is-active z-20' : 'z-10'}`}
                               style={{
                                 left: `${layoutSettings.banner.x}%`,
                                 top: `${layoutSettings.banner.y}%`,
                                 backgroundColor: styleSettings.bannerColor,
-                                fontFamily: 'Oswald, sans-serif'
+                                fontFamily: 'Space Grotesk, sans-serif',
+                                touchAction: 'none'
                               }}
                             >
                               {bannerText}
@@ -1197,51 +1396,39 @@ const App: React.FC = () => {
                           <h2
                             onMouseDown={(e) => handleMouseDown(e, 'headline')}
                             onTouchStart={(e) => handleTouchStart(e, 'headline')}
-                            className={`absolute relative font-bold mb-3 leading-tight cursor-move select-none transition-shadow ${draggingElement === 'headline' || resizingTextElement === 'headline' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
+                            className={`canvas-text absolute font-bold mb-3 leading-tight cursor-move select-none transition-shadow ${selectedCanvasText === 'headline' ? 'is-selected' : ''} ${draggingElement === 'headline' || resizingTextElement === 'headline' ? 'is-active z-20' : 'z-10'}`}
                             style={{
                               left: `${layoutSettings.headline.x}%`,
                               top: `${layoutSettings.headline.y}%`,
                               color: styleSettings.headlineColor,
                               fontFamily: `${styleSettings.headlineFont}, sans-serif`,
-                              fontSize: `${Math.max(10, styleSettings.headlineFontSize * previewScale)}px`,
+                              fontSize: `${Math.max(12, Math.round(styleSettings.headlineFontSize * previewScale))}px`,
                               wordBreak: 'break-word',
-                              maxWidth: '90%'
+                              maxWidth: `${Math.min(selectedTemplate?.headlineWidth || 90, 98 - layoutSettings.headline.x)}%`,
+                              whiteSpace: 'pre-wrap'
                             }}
                           >
                             {applyTextCase(headline || 'TEMPLATE', styleSettings.headlineCasing)}
-                            <button
-                              type="button"
-                              onMouseDown={(e) => handleTextResizeMouseDown(e, 'headline')}
-                              onTouchStart={(e) => handleTextResizeTouchStart(e, 'headline')}
-                               className="absolute -bottom-2 -right-2 w-4 h-4 rounded-sm border border-white/80 bg-red-500/90 shadow-md cursor-nwse-resize"
-                              title="Resize headline text"
-                              aria-label="Resize headline text"
-                            />
+                            {renderTextResizeHandles('headline')}
                           </h2>
 
                           <p
                             onMouseDown={(e) => handleMouseDown(e, 'description')}
                             onTouchStart={(e) => handleTouchStart(e, 'description')}
-                            className={`absolute relative leading-relaxed cursor-move select-none transition-shadow ${draggingElement === 'description' || resizingTextElement === 'description' ? 'ring-2 ring-red-500 shadow-xl z-20' : 'hover:ring-1 hover:ring-white/50 z-10'}`}
+                            className={`canvas-text absolute leading-relaxed cursor-move select-none transition-shadow ${selectedCanvasText === 'description' ? 'is-selected' : ''} ${draggingElement === 'description' || resizingTextElement === 'description' ? 'is-active z-20' : 'z-10'}`}
                             style={{
                               left: `${layoutSettings.description.x}%`,
                               top: `${layoutSettings.description.y}%`,
                               color: styleSettings.descriptionColor,
                               fontFamily: `${styleSettings.descriptionFont}, sans-serif`,
-                              fontSize: `${Math.max(8, styleSettings.descriptionFontSize * previewScale)}px`,
+                              fontSize: `${Math.max(9, Math.round(styleSettings.descriptionFontSize * previewScale))}px`,
                               wordBreak: 'break-word',
-                              maxWidth: '90%'
+                              maxWidth: `${Math.min(selectedTemplate?.descriptionWidth || 90, 98 - layoutSettings.description.x)}%`,
+                              whiteSpace: 'pre-wrap'
                             }}
                           >
                             {applyTextCase(description || 'Your description will appear here...', styleSettings.descriptionCasing)}
-                            <button
-                              type="button"
-                              onMouseDown={(e) => handleTextResizeMouseDown(e, 'description')}
-                              onTouchStart={(e) => handleTextResizeTouchStart(e, 'description')}
-                               className="absolute -bottom-2 -right-2 w-4 h-4 rounded-sm border border-white/80 bg-red-500/90 shadow-md cursor-nwse-resize"
-                              title="Resize description text"
-                              aria-label="Resize description text"
-                            />
+                            {renderTextResizeHandles('description')}
                           </p>
                         </div>
                       </div>
@@ -1267,7 +1454,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row justify-center gap-3 mb-4">
+                <div className="flex flex-row flex-wrap justify-center gap-2.5 mb-3">
                   <button className={`flex items-center justify-center px-4 sm:px-6 py-2 rounded-lg text-sm font-medium border ${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
                     <Save className="w-4 h-4 mr-2" />
                     Save Draft
@@ -1295,19 +1482,19 @@ const App: React.FC = () => {
 
                   <div className="w-full sm:w-auto flex items-center justify-center space-x-2">
                     <button
-                      onClick={() => setZoom(Math.max(50, zoom - 10))}
+                      onClick={() => setZoom(Math.max(50, zoom - 10))} aria-label="Shrink preview" title="Shrink preview" disabled={zoom <= 50}
                       className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
                     >
-                      <Minus className="w-4 h-4" />
+                      <Minimize2 className="w-4 h-4" />
                     </button>
                     <span className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-700 border border-gray-200'}`}>
                       {zoom}%
                     </span>
                     <button
-                      onClick={() => setZoom(Math.min(150, zoom + 10))}
+                      onClick={() => setZoom(Math.min(150, zoom + 10))} aria-label="Expand preview" title="Expand preview" disabled={zoom >= 150}
                       className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
                     >
-                      <Plus className="w-4 h-4" />
+                      <Maximize2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -1330,7 +1517,7 @@ const App: React.FC = () => {
               Build, brand, and publish from one workspace
             </h2>
             <p className={`mt-4 max-w-3xl text-sm md:text-base reveal reveal-delay-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Newsbanana now includes full-site sections so visitors can understand your product, pricing, and workflow before entering the editor.
+              Ncreative now includes full-site sections so visitors can understand your product, pricing, and workflow before entering the editor.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5 mt-10">
@@ -1459,7 +1646,7 @@ const App: React.FC = () => {
                   className={`inline-flex items-center justify-center rounded-lg px-5 py-3 text-sm font-medium border ${darkMode ? 'border-gray-700 text-gray-200 hover:bg-gray-900' : 'border-gray-300 text-gray-800 hover:bg-gray-50'}`}
                 >
                   <Mail className="w-4 h-4 mr-2" />
-                  hello@newsbanana.com
+                  Email us
                 </a>
               </div>
             </div>
@@ -1472,10 +1659,10 @@ const App: React.FC = () => {
               <div className="bg-red-500 p-1.5 rounded-md">
                 <Newspaper className="w-4 h-4 text-white" />
               </div>
-              <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>newsbanana</span>
+              <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Ncreative</span>
             </div>
             <p className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
-              Copyright {new Date().getFullYear()} newsbanana. All rights reserved.
+              Copyright {new Date().getFullYear()} Ncreative. All rights reserved.
             </p>
             <a href="/blogs/flipkart-big-billion-days-2026-sale-date/" className={`text-sm ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
               Latest sale update
@@ -1484,47 +1671,8 @@ const App: React.FC = () => {
         </footer>
 
         {/* ============ TEMPLATE SIDEBAR ============ */}
-        {showTemplateSidebar && (
-          <div className="fixed inset-0 z-50 flex">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setShowTemplateSidebar(false)} />
-            <div className={`relative ml-auto w-full max-w-sm h-full overflow-y-auto shadow-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Templates</h2>
-                  <button onClick={() => setShowTemplateSidebar(false)} className={darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}>
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {VISUAL_TEMPLATES.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => handleSelectTemplate(t)}
-                      className={`rounded-lg overflow-hidden border-2 transition-all ${selectedTemplate?.id === t.id ? 'border-red-500' : darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'}`}
-                    >
-                      <div className="aspect-square bg-gray-100">
-                        <img src={t.thumbnail} alt={t.name} className="w-full h-full object-cover" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
-                      </div>
-                      <p className={`p-2 text-xs text-center font-medium ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-700'}`}>{t.name}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {showTemplateSidebar && <TemplatePicker darkMode={darkMode} selectedId={selectedTemplate?.id} onSelect={handleSidebarTemplateSelect} onClose={() => setShowTemplateSidebar(false)} />}
 
-        {/* Mobile Floating Upload */}
-        <div className="md:hidden fixed left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)+4.25rem)] z-[60]">
-          <button
-            type="button"
-            onClick={handleMobileUploadClick}
-            className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-xl border-4 border-white/20 flex items-center justify-center"
-            title="Upload image or video"
-            aria-label="Upload image or video"
-          >
-            <Upload className="w-6 h-6" />
-          </button>
           <input
             ref={mobileUploadInputRef}
             type="file"
@@ -1532,10 +1680,9 @@ const App: React.FC = () => {
             onChange={handleImageUpload}
             className="hidden"
           />
-        </div>
 
         {/* Mobile Bottom Bar */}
-        <div className={`md:hidden fixed bottom-0 left-0 right-0 border-t px-2 sm:px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] flex justify-around z-50 ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}`}>
+        <div className={`mobile-bottom-bar md:hidden fixed bottom-0 left-0 right-0 border-t px-1 pt-1 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] grid grid-cols-5 z-[60] ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}`}>
           <button
             onClick={() => setShowMobilePanel(!showMobilePanel)}
             className={`flex flex-col items-center ${showMobilePanel ? 'text-red-500' : darkMode ? 'text-gray-300' : 'text-gray-600'}`}
@@ -1552,6 +1699,10 @@ const App: React.FC = () => {
           >
             <Grid className="w-5 h-5" />
             <span className="text-xs mt-1">Templates</span>
+          </button>
+          <button type="button" onClick={handleMobileUploadClick} className={`flex flex-col items-center ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            <Upload className="w-5 h-5" />
+            <span className="text-xs mt-1">Upload</span>
           </button>
           <button
             onClick={handleGenerate}
