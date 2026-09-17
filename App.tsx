@@ -186,9 +186,14 @@ const TEXT_SIZE_LIMITS: Record<ResizableTextElement, { min: number; max: number 
   description: { min: 12, max: 48 }
 };
 
-const App: React.FC = () => {
-  // Theme
-  const [darkMode, setDarkMode] = useState(false);
+interface AppProps {
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
+  onBack: () => void;
+  initialTemplateId?: string;
+}
+
+const App: React.FC<AppProps> = ({ darkMode, onToggleDarkMode, onBack, initialTemplateId }) => {
 
   // UI state
   const [showTemplateSidebar, setShowTemplateSidebar] = useState(false);
@@ -733,6 +738,16 @@ const App: React.FC = () => {
     sampleContentRef.current = { headline: template.defaultHeadline, description: template.defaultDescription };
   };
 
+  React.useEffect(() => {
+    if (!initialTemplateId) return;
+    const templateId = initialTemplateId === 'fact-check' ? 'fact-card' : initialTemplateId;
+    const template = VISUAL_TEMPLATES.find(item => item.id === templateId);
+    if (template) handleSelectTemplate(template);
+    if (initialTemplateId === 'video-reel') {
+      setSelectedSocialMediaSize(socialMediaSizes.find(size => size.id === 'instagram-reel') || socialMediaSizes[0]);
+    }
+  }, [initialTemplateId]);
+
   const handleGenerate = async () => {
     if (!headline) return;
     const activeMediaType: 'image' | 'video' = uploadedImage ? uploadedMediaType : 'image';
@@ -973,7 +988,7 @@ const App: React.FC = () => {
         <header className={`app-header ${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'} border-b px-4 py-3 sticky top-0 z-40`}>
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
             {/* Logo */}
-            <div className="flex items-center space-x-3 min-w-0">
+            <button type="button" onClick={onBack} aria-label="Back to home" className="flex items-center space-x-3 min-w-0 text-left">
               <div className={`${darkMode ? 'bg-red-500 text-white' : 'bg-red-500 text-white'} p-2 rounded-lg`}>
                 <Newspaper className="w-5 h-5" />
               </div>
@@ -983,7 +998,7 @@ const App: React.FC = () => {
                 </div>
                 <p className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Create Professional News Graphics</p>
               </div>
-            </div>
+            </button>
 
             <nav className="hidden lg:flex items-center space-x-5">
               {[
@@ -1043,7 +1058,7 @@ const App: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setDarkMode(!darkMode)}
+                onClick={onToggleDarkMode}
                 className={`p-2 rounded-lg ${darkMode ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600'}`}
               >
                 {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
