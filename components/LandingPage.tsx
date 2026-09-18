@@ -186,10 +186,6 @@ const FAQ_ITEMS = [
     a: 'Yes. Upload your PNG watermark, adjust its size, drag it to any corner or center position, and customize background colors, font families, and casing to match your brand guide.'
   },
   {
-    q: 'How does the Lifetime License work?',
-    a: 'You pay once ($9 during early launch) and own it forever. There are no monthly subscriptions, no watermarks, no limits on downloads, and all future template packs and 1.x updates are included free.'
-  },
-  {
     q: 'Can I use Ncreative on mobile or tablets?',
     a: 'Yes. Ncreative is fully responsive with touch-optimized canvas drag-and-drop, mobile bottom bar, and full mobile upload support for reporters working in the field.'
   }
@@ -242,22 +238,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <a href="#showcase" className="hover:text-ink transition-colors">Showcase</a>
             <a href="#features" className="hover:text-ink transition-colors">Features</a>
             <a href="/blogs/" className="hover:text-ink transition-colors">Blog</a>
-            <a href="#pricing" className="hover:text-ink transition-colors">Pricing</a>
+            {/* <a href="#pricing" className="hover:text-ink transition-colors">Pricing</a> */}
             <a href="#faq" className="hover:text-ink transition-colors">FAQ</a>
           </nav>
 
           {/* Right Actions */}
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Launch Counter Pill */}
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-500"></span>
-              </span>
-              <span className="text-xs font-medium text-ink-muted">
-                84 of 300 launch copies left
-              </span>
-            </div>
 
             {/* Open Studio Button */}
             <button
@@ -296,13 +282,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             {/* Micro badges */}
             <div className="rise mt-6 flex flex-wrap items-center justify-center gap-3 whitespace-nowrap [animation-delay:180ms] md:gap-6 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75"></span>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-500"></span>
-                </span>
-                <span className="font-medium text-ink-muted">84 of 300 early access copies left</span>
-              </div>
               <div className="flex items-center gap-1.5 text-ink-muted">
                 <Zap className="w-4 h-4 text-sky-500 shrink-0" />
                 <span className="font-medium">10-second export</span>
@@ -322,13 +301,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <span>Launch Creator Studio</span>
                 <ArrowRight className="w-4 h-4 -mr-1 opacity-85" />
               </button>
-
-              <a
-                href="#pricing"
-                className="btn btn-light !h-12 px-6 text-base font-medium"
-              >
-                <span>Get Lifetime · $9</span>
-              </a>
             </div>
 
             {/* Sublink */}
@@ -522,28 +494,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </section>
         </div>
 
-        {/* ============ TESTIMONIAL CALLOUT #1 ============ */}
-        <div className="border-y border-line-soft bg-surface-soft">
-          <div className="mx-auto w-full max-w-4xl px-4 py-8 lg:py-14">
-            <p className="text-xl font-medium tracking-tight text-balance lg:text-3xl">
-              “I don’t see why this does not cost $49. Replaced our entire graphic design bottleneck in under 5 minutes.”
-            </p>
-            <div className="mt-5 flex items-center gap-3.5 lg:mt-6">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center font-bold text-white text-sm shadow-sm">
-                HM
-              </div>
-              <div>
-                <div className="flex items-center gap-1 text-sm font-semibold">
-                  Hans Malkow
-                  <Check className="w-3.5 h-3.5 text-sky-500 stroke-[3]" />
-                </div>
-                <div className="text-xs text-ink-muted">@hans_malkow · Tech & News Desk</div>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* ============ PRICING SECTION (The DiskBuddy 2-Column Card) ============ */}
+        {/* ============ PRICING SECTION (commented out) ============ */}
+        {/*
         <div className="py-12 lg:py-24" id="pricing">
           <section className="scroll-mt-20">
             <div className="mx-auto w-full max-w-4xl px-4">
@@ -554,7 +507,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               <div className="mt-6 rounded-2xl bg-surface-soft/90 px-1 pt-1 sm:mt-10">
                 <div className="grid gap-0.5 overflow-hidden rounded-xl bg-fill shadow-bedo md:grid-cols-[3fr_2fr]">
-                  {/* Left Column */}
+                  Left Column
                   <div className="bg-surface p-6 lg:p-8">
                     <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">
                       Ncreative Lifetime Studio
@@ -564,26 +517,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </p>
 
                     <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="text-3xl font-bold tracking-tight sm:text-[42px]">
-                        $9
-                      </span>
-                      <span className="text-lg text-ink-muted line-through">
-                        $49
-                      </span>
-                      <span className="text-base text-ink-muted">
-                        one-time
-                      </span>
+                      <span className="text-3xl font-bold tracking-tight sm:text-[42px]">$9</span>
+                      <span className="text-lg text-ink-muted line-through">$49</span>
+                      <span className="text-base text-ink-muted">one-time</span>
                     </div>
 
-                    {/* Launch Copies Progress Bar */}
+                    Launch Copies Progress Bar
                     <div className="mt-4">
                       <div className="flex items-center justify-between gap-4 text-xs font-semibold">
-                        <span className="text-orange-500">
-                          Launch price for the first 300 copies
-                        </span>
-                        <span className="shrink-0 text-ink-muted">
-                          84 left
-                        </span>
+                        <span className="text-orange-500">Launch price for the first 300 copies</span>
+                        <span className="shrink-0 text-ink-muted">84 left</span>
                       </div>
                       <div
                         role="progressbar"
@@ -593,25 +536,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         aria-valuenow={216}
                         className="mt-2 h-2 w-full overflow-hidden rounded-full bg-fill"
                       >
-                        <div
-                          className="h-full rounded-full bg-orange-500 transition-[width] duration-700"
-                          style={{ width: '72%' }}
-                        />
+                        <div className="h-full rounded-full bg-orange-500 transition-[width] duration-700" style={{ width: '72%' }} />
                       </div>
-                      <p className="mt-1.5 text-xs text-ink-muted font-mono">
-                        216 of 300 claimed
-                      </p>
+                      <p className="mt-1.5 text-xs text-ink-muted font-mono">216 of 300 claimed</p>
                     </div>
 
-                    <button
-                      onClick={() => onOpenStudio()}
-                      className="btn btn-primary mt-6 w-full !h-12 text-base font-semibold"
-                    >
+                    <button onClick={() => onOpenStudio()} className="btn btn-primary mt-6 w-full !h-12 text-base font-semibold">
                       <span>Get Lifetime Access · $9</span>
                       <ArrowRight className="w-4 h-4 ml-1" />
                     </button>
 
-                    {/* Features checklist */}
+                    Features checklist
                     <ul className="mt-6 flex flex-col gap-2.5 sm:gap-3">
                       {[
                         'All eight visual templates & aspect ratios included',
@@ -628,17 +563,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </ul>
                   </div>
 
-                  {/* Right Column */}
+                  Right Column
                   <div className="grid content-start gap-5 bg-surface p-6 lg:p-8">
                     <div>
-                      <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                        Fits your newsroom
-                      </h3>
-                      <p className="mt-1 text-sm text-ink-soft sm:text-base">
-                        Ultra-fast, private, and lightweight.
-                      </p>
+                      <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">Fits your newsroom</h3>
+                      <p className="mt-1 text-sm text-ink-soft sm:text-base">Ultra-fast, private, and lightweight.</p>
                     </div>
-
                     <ul className="flex flex-col gap-2.5 sm:gap-3">
                       {[
                         'Works on Mac, Windows, iOS, and Android',
@@ -655,7 +585,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                 </div>
 
-                {/* Bottom Card Banner */}
+                Bottom Card Banner
                 <div className="px-4 py-4">
                   <div className="flex items-center gap-4">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface ring-1 ring-inset ring-line text-red-500">
@@ -673,27 +603,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </section>
         </div>
+        */}
 
-        {/* ============ TESTIMONIAL CALLOUT #2 ============ */}
-        <div className="border-y border-line-soft bg-surface-soft">
-          <div className="mx-auto w-full max-w-4xl px-4 py-8 lg:py-14">
-            <p className="text-xl font-medium tracking-tight text-balance lg:text-3xl">
-              “Found it right when our breaking news desk needed it. We post 10x faster now.”
-            </p>
-            <div className="mt-5 flex items-center gap-3.5 lg:mt-6">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center font-bold text-white text-sm shadow-sm">
-                OJ
-              </div>
-              <div>
-                <div className="flex items-center gap-1 text-sm font-semibold">
-                  Ojash Sharma
-                  <Check className="w-3.5 h-3.5 text-sky-500 stroke-[3]" />
-                </div>
-                <div className="text-xs text-ink-muted">@Ojash_101 · Independent Journalist</div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* ============ FAQ SECTION ============ */}
         <div className="flex flex-col gap-20 py-12 lg:gap-28 lg:py-20" id="faq">
@@ -814,7 +725,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <li><button onClick={() => onOpenStudio()} className="hover:text-ink transition-colors">Creator Studio</button></li>
                   <li><a href="#showcase" className="hover:text-ink transition-colors">Showcase</a></li>
                   <li><a href="#features" className="hover:text-ink transition-colors">Features</a></li>
-                  <li><a href="#pricing" className="hover:text-ink transition-colors">Pricing</a></li>
                   <li><a href="#faq" className="hover:text-ink transition-colors">FAQ</a></li>
                   <li><a href="/blogs/" className="hover:text-ink transition-colors">Blog</a></li>
                 </ul>
