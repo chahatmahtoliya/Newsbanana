@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import LandingPage from './components/LandingPage';
@@ -38,19 +39,24 @@ const Site: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  return page.studio ? (
-    <App
-      darkMode={darkMode}
-      onToggleDarkMode={() => setDarkMode(value => !value)}
-      onBack={() => navigate(false)}
-      initialTemplateId={page.templateId}
-    />
-  ) : (
-    <LandingPage
-      darkMode={darkMode}
-      onToggleDarkMode={() => setDarkMode(value => !value)}
-      onOpenStudio={templateId => navigate(true, templateId)}
-    />
+  return (
+    <>
+      {page.studio ? (
+        <App
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(value => !value)}
+          onBack={() => navigate(false)}
+          initialTemplateId={page.templateId}
+        />
+      ) : (
+        <LandingPage
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(value => !value)}
+          onOpenStudio={templateId => navigate(true, templateId)}
+        />
+      )}
+      <Analytics />
+    </>
   );
 };
 
